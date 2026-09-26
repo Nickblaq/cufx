@@ -1,11 +1,28 @@
 {
   "$schema": "https://schema.railpack.com",
   "packages": {
-    "python": "3.13",
-    "node": "22"
+    "node": "22",
+    "python": "3.13"
+  },
+  "steps": {
+    "install": {
+      "inputs": [
+        { "step": "packages:mise" },
+        { "local": true, "include": ["."] }
+      ],
+      "commands": [
+        "npm install",
+        "pip install -r requirements.txt"
+      ]
+    },
+    "build": {
+      "inputs": [{ "step": "install" }],
+      "commands": ["npm run build"],
+      "deployOutputs": ["."]
+    }
   },
   "deploy": {
-    "aptPackages": ["ffmpeg"],
-    "startCommand": "npm run start"
+    "startCommand": "npm run start",
+    "aptPackages": ["ffmpeg"]
   }
 }

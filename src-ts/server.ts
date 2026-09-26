@@ -1,3 +1,4 @@
+// src-ts/server.ts
 import express from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import Database from 'better-sqlite3';
@@ -7,6 +8,16 @@ const PORT = process.env.PORT || 3000;
 const DB_PATH = 'data/production.db';
 
 app.use(express.json());
+
+// 🌟 FIX: This makes your main Railway domain return a status message
+app.get('/', (req, res) => {
+    res.json({
+        status: "online",
+        message: "Welcome to the Dual-Runtime API Gateway",
+        runtimes: ["Node.js/TypeScript", "Python 3"],
+        database: "SQLite (Shared)"
+    });
+});
 
 // Native TS endpoint: Reads directly from the shared SQLite DB
 app.get('/ts-users', (req, res) => {
@@ -25,7 +36,7 @@ app.use('/py', createProxyMiddleware({
     target: 'http://127.0.0.1:8000',
     changeOrigin: true,
     pathRewrite: {
-        '^/py': '', // Strips '/py' so '/py/add-user' becomes '/add-user' when hitting Python
+        '^/py': '', // Strips '/py' so '/py/python-status' becomes '/python-status' when hitting Python
     },
 }));
 

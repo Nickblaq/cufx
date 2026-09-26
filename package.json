@@ -1,13 +1,23 @@
 {
   "name": "cufx",
   "version": "1.0.0",
-  "type": "module",
-  "private": true,
+  "main": "src-ts/server.ts",
   "scripts": {
-    "start": "node server.js"
+    "start-py": "python3 src-py/main.py",
+    "start-ts": "ts-node src-ts/server.ts",
+    "start": "concurrently \"npm run start-py\" \"npm run start-ts\""
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "http-proxy-middleware": "^3.0.0"
+    "axios": "^1.6.0",
+    "better-sqlite3": "^11.0.0",
+    "concurrently": "^8.2.0",
+    "express": "^4.19.0",
+    "http-proxy-middleware": "^3.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.0"
   }
 }

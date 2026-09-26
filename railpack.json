@@ -18,7 +18,7 @@
     "build": {
       "inputs": [{ "step": "install" }],
       "commands": ["npm run build"],
-      "deployOutputs": ["."]
+      "deployOutputs": [{ "include": ["."] }]
     }
   },
   "deploy": {

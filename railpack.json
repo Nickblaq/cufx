@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "packages": {
+    "node": "20",
+    "python": "3.13"
+  },
+  "steps": {
+    "install": {
+      "commands": [
+        "npm install",
+        "pip install -r requirements.txt"
+      ]
+    }
+  },
+  "deploy": {
+    "startCommand": "bash start.sh",
+    "inputs": [
+      { "step": "install" }
+    ]
+  }
+}

@@ -1,23 +1,21 @@
 {
-  "name": "cufx",
+  "name": "cufx-next",
   "version": "1.0.0",
-  "main": "src-ts/server.ts",
+  "private": true,
   "scripts": {
-    "start-py": "python3 src-py/main.py",
-    "start-ts": "ts-node src-ts/server.ts",
-    "start": "concurrently \"npm run start-py\" \"npm run start-ts\""
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
   },
   "dependencies": {
-    "axios": "^1.6.0",
-    "better-sqlite3": "^11.0.0",
-    "concurrently": "^8.2.0",
-    "express": "^4.19.0",
-    "http-proxy-middleware": "^3.0.0",
-    "ts-node": "^10.9.0",
-    "typescript": "^5.0.0"
+    "next": "14.2.5",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/node": "^20.11.0"
+    "typescript": "5.5.4",
+    "@types/node": "20.14.10",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.1"
   }
 }

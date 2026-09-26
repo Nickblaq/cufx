@@ -1,41 +1,55 @@
-# cufx — single service, two runtimes
+# cufx — Next.js calling Python via subprocess
 
-One container, one Railway service. Node is the only process exposed
-publicly; Python runs alongside it inside the same container on a fixed
-internal port (8000), reached only via `localhost`.
+One process (Next.js), one port. No sidecar server, no internal proxy, no
+port matching. Python code lives in `/python` as standalone scripts; API
+routes run them on demand via `child_process.execFile` and read back JSON.
 
 ```
-cufx/
-├── railpack.json     # installs both node + python, runs start.sh
-├── start.sh          # boots python in background, node in foreground
-├── package.json      # node deps
-├── server.js         # public entrypoint — /health, /hello, proxies /api/py/*
-├── requirements.txt  # python deps (fastapi, uvicorn, yt-dlp)
-└── main.py           # python app — /health, /hello, /ytdlp-check
+cufx-next/
+├── railpack.json         # node + python, single build, single start
+├── package.json
+├── app/
+│   ├── page.tsx
+│   ├── layout.tsx
+│   └── api/
+│       ├── hello-py/route.ts        # calls python/hello.py
+│       └── ytdlp-check/route.ts     # calls python/ytdlp_check.py
+├── lib/callPython.ts     # shared helper: run a script, parse its JSON stdout
+├── python/
+│   ├── hello.py
+│   └── ytdlp_check.py
+└── requirements.txt
 ```
+
+## How to add a new Python function
+
+1. Write a script in `python/`, e.g. `python/my_task.py`, that prints one
+   JSON object to stdout:
+   ```python
+   import json
+   print(json.dumps({"result": 42}))
+   ```
+2. Add any packages it needs to `requirements.txt`.
+3. Call it from a route:
+   ```ts
+   const data = await callPython("my_task.py", ["optional", "args"]);
+   ```
+   Args show up in the script as `sys.argv[1:]`.
 
 ## Deploy (Railway)
 
-1. New Project → Deploy from GitHub repo → select `cufx`.
-2. That's it — one service, root directory is the repo root (default).
-3. Generate a public domain for it (Settings → Networking).
+1. New Project → Deploy from GitHub repo → this repo.
+2. One service, root directory = repo root (default). Nothing else to set.
+3. Generate domain → when it asks for a port, Next.js reads `PORT`
+   automatically, so leave the default Railway suggests (or 8080 if it asks).
 4. Deploy.
-
-No extra settings, no manual env vars. `PORT` is injected by Railway
-automatically for the node process; python's port (8000) is fixed in the
-code since it never leaves the container.
 
 ## Test
 
-Hit the one public domain Railway gives you:
-
 ```
-GET https://<your-domain>/health              # node
-GET https://<your-domain>/hello                # node
-GET https://<your-domain>/api/py/health        # python, via proxy
-GET https://<your-domain>/api/py/hello         # python, via proxy
-GET https://<your-domain>/api/py/ytdlp-check   # confirms yt-dlp + node both work
+GET https://<your-domain>/api/hello-py
+GET https://<your-domain>/api/ytdlp-check
 ```
 
-If all five respond, both runtimes are running correctly in the single
-service and the internal proxy is working.
+Both should return JSON. `ytdlp-check` confirms yt-dlp is installed and
+Node is reachable from Python's subprocess environment.

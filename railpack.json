@@ -17,14 +17,12 @@
     },
     "build": {
       "inputs": [{ "step": "install" }],
-      "commands": ["npm run build"]
+      "commands": ["npm run build"],
+      "deployOutputs": ["."]
     }
   },
   "deploy": {
-    "aptPackages": ["ffmpeg"],
     "startCommand": "npm run start",
-    "inputs": [
-      { "step": "build", "include": ["."] }
-    ]
+    "aptPackages": ["ffmpeg"]
   }
 }

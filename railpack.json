@@ -1,25 +1,17 @@
 {
-  "$schema": "https://schema.railpack.com",
-  "packages": {
-    "node": "20",
-    "python": "3.13"
-  },
-  "steps": {
+  "providers": ["node", "python"],
+  "phases": {
+    "setup": {
+      "nixPkgs": ["nodejs", "python3"]
+    },
     "install": {
-      "inputs": [
-        { "step": "packages:mise" },
-        { "local": true, "include": ["."] }
-      ],
-      "commands": [
+      "cmds": [
         "npm install",
         "pip install -r requirements.txt"
       ]
+    },
+    "start": {
+      "cmd": "npm start"
     }
-  },
-  "deploy": {
-    "startCommand": "bash start.sh",
-    "inputs": [
-      { "step": "install", "include": ["."] }
-    ]
   }
 }

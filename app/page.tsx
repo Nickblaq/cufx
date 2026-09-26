@@ -55,7 +55,108 @@ export default function Home() {
         <span>Next.js · ffmpeg · sharp · yt-dlp</span>
       </footer>
 
-      {/* ...unchanged <style jsx> block... */}
+      <style jsx>{`
+        .root {
+          --bg: #f6f6f3;
+          --surface: #ffffff;
+          --border: #e3e3df;
+          --ink: #14171a;
+          --ink-soft: #5b6065;
+          --accent: #2f5fed;
+          font-family: var(--font-sans), system-ui, sans-serif;
+          color: var(--ink);
+          background: var(--bg);
+          max-width: 560px;
+          margin: 0 auto;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          padding: 0 20px;
+        }
+
+        .topbar {
+          padding: 20px 0 8px;
+        }
+        .wordmark {
+          font-size: 14px;
+          font-weight: 700;
+          letter-spacing: 0.02em;
+        }
+
+        .hero {
+          padding: 36px 0 28px;
+        }
+        .hero h1 {
+          font-size: 32px;
+          line-height: 1.15;
+          font-weight: 600;
+          margin: 0 0 12px;
+          letter-spacing: -0.01em;
+        }
+        .sub {
+          font-size: 15px;
+          line-height: 1.5;
+          color: var(--ink-soft);
+          margin: 0;
+          max-width: 42ch;
+        }
+
+        .cards {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .card {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 16px;
+          padding: 14px;
+          text-decoration: none;
+          color: inherit;
+        }
+        .swatch {
+          width: 48px;
+          height: 48px;
+          border-radius: 12px;
+          flex-shrink: 0;
+          background: linear-gradient(155deg, #3a4a7a 0%, #b8618f 42%, #f2a34f 78%, #ffd98e 100%);
+        }
+        .swatchAlt {
+          background: linear-gradient(155deg, #2f5fed 0%, #6c8bff 55%, #b9c8ff 100%);
+        }
+        .cardBody {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          min-width: 0;
+        }
+        .cardTitle {
+          font-size: 15px;
+          font-weight: 600;
+        }
+        .cardDesc {
+          font-size: 12.5px;
+          line-height: 1.4;
+          color: var(--ink-soft);
+        }
+
+        .footer {
+          margin-top: auto;
+          padding: 40px 0 28px;
+          font-family: var(--font-mono), monospace;
+          font-size: 11.5px;
+          color: var(--ink-soft);
+        }
+
+        @media (min-width: 640px) {
+          .hero h1 {
+            font-size: 38px;
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -6,6 +6,10 @@
   },
   "steps": {
     "install": {
+      "inputs": [
+        { "step": "packages:mise" },
+        { "local": true, "include": ["."] }
+      ],
       "commands": [
         "npm install",
         "pip install -r requirements.txt"
@@ -15,7 +19,7 @@
   "deploy": {
     "startCommand": "bash start.sh",
     "inputs": [
-      { "step": "install" }
+      { "step": "install", "include": ["."] }
     ]
   }
 }

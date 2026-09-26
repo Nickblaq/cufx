@@ -21,6 +21,7 @@
     }
   },
   "deploy": {
+    "aptPackages": ["ffmpeg"],
     "startCommand": "npm run start",
     "inputs": [
       { "step": "build", "include": ["."] }

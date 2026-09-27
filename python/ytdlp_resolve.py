@@ -57,10 +57,10 @@ def pick_subtitles(info: dict):
     out = []
     for code, tracks in (info.get("subtitles") or {}).items():
         if tracks:
-            out.append({"code": code, "auto": False})
+            out.append({"code": code, "auto": False, "label": tracks[0].get("name") or code})
     for code, tracks in (info.get("automatic_captions") or {}).items():
         if tracks:
-            out.append({"code": code, "auto": True})
+            out.append({"code": code, "auto": True, "label": tracks[0].get("name") or code})
     return out
 
 

@@ -30,12 +30,18 @@ def write_status(status_file: str, data: dict):
 
 def main():
     status_file, output_dir, options_json = sys.argv[1], sys.argv[2], sys.argv[3]
-    opts = json.loads(options_json)
 
     state = {"status": "starting", "progress": 0, "downloadedBytes": 0,
               "totalBytes": None, "speed": None, "eta": None, "error": None,
               "filename": None}
     write_status(status_file, state)
+
+    try:
+        opts = json.loads(options_json)
+    except Exception as e:
+        state.update({"status": "error", "error": f"Invalid job options: {e}"})
+        write_status(status_file, state)
+        return
 
     last_write = 0.0
 
@@ -165,8 +171,20 @@ def main():
         state.update({"status": "error", "error": f"{e}"})
         write_status(status_file, state)
         traceback.print_exc(file=sys.stderr)
-        sys.exit(1)
+        # Exit 0 on purpose: this script's success/failure is read from the
+        # status file, never from the process exit code (see ytdlp_resolve.py
+        # for why — a non-zero exit here has no functional effect today since
+        # nothing parses this script's exit code, but keeping every
+        # Node<->Python bridge script on the same "exit code is meaningless"
+        # contract avoids reintroducing that bug if this script is ever
+        # awaited directly instead of polled via the status file.
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        # Last-resort catch: argv[1]/[2] missing entirely (can't even locate
+        # the status file to write to). Print to stderr for the Node-side
+        # child.stderr logger to pick up; still exit 0 per the standing rule.
+        traceback.print_exc(file=sys.stderr)

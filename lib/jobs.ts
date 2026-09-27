@@ -13,6 +13,17 @@ const execFileAsync = promisify(execFile);
 // lifetime a "download queue" needs here.
 const JOBS_ROOT = path.join(os.tmpdir(), "cufx-jobs");
 
+// Same folder callPython.ts points PYTHONPATH at — pip installs here via
+// `pip install -r requirements.txt --target ./python-modules` at build time.
+const PYTHON_MODULES_PATH = path.join(process.cwd(), "python-modules");
+
+function pythonEnv() {
+  return {
+    ...process.env,
+    PYTHONPATH: PYTHON_MODULES_PATH,
+  };
+}
+
 export function jobDirs(jobId: string) {
   const dir = path.join(JOBS_ROOT, jobId);
   return {
@@ -37,6 +48,7 @@ export async function runPythonJSON<T = unknown>(
   const scriptPath = path.join(process.cwd(), "python", scriptName);
   const { stdout } = await execFileAsync("python3", [scriptPath, ...args], {
     maxBuffer: 1024 * 1024 * 32,
+    env: pythonEnv(),
   });
   return JSON.parse(stdout) as T;
 }
@@ -52,6 +64,7 @@ export function startPythonDownload(jobId: string, optionsJson: string) {
 
   const child = spawn("python3", [scriptPath, statusFile, outputDir, optionsJson], {
     stdio: ["ignore", "ignore", "pipe"],
+    env: pythonEnv(),
   });
 
   let stderr = "";

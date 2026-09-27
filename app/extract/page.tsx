@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
 
 const grotesk = Space_Grotesk({
@@ -19,22 +19,11 @@ const plexMono = IBM_Plex_Mono({
 const stroke = { fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 type IconProps = { size?: number };
 
-function IconBack({ size = 20 }: IconProps) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" {...stroke}><path d="M15 5 8 12l7 7" /></svg>;
-}
 function IconLink({ size = 18 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" {...stroke}>
       <path d="M10 14a4 4 0 0 0 5.66 0l2.83-2.83a4 4 0 0 0-5.66-5.66L11.5 6.7" />
       <path d="M14 10a4 4 0 0 0-5.66 0l-2.83 2.83a4 4 0 0 0 5.66 5.66l1.17-1.17" />
-    </svg>
-  );
-}
-function IconPaste({ size = 18 }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...stroke}>
-      <rect x="7" y="4" width="10" height="4" rx="1" />
-      <path d="M8 6H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2" />
     </svg>
   );
 }
@@ -47,128 +36,146 @@ function IconCheck({ size = 14 }: IconProps) {
 function IconX({ size = 14 }: IconProps) {
   return <svg width={size} height={size} viewBox="0 0 24 24" {...stroke}><path d="M6 6l12 12M18 6 6 18" /></svg>;
 }
+function IconDownload({ size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...stroke}>
+      <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+    </svg>
+  );
+}
 
 /* --------------------------------- helpers -------------------------------- */
 
 function fmtTime(sec: number) {
+  if (!Number.isFinite(sec)) return "--:--";
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
-function fmtSize(mb: number) {
+function fmtBytes(bytes: number | null | undefined) {
+  if (!bytes) return "~";
+  const mb = bytes / 1024 / 1024;
   return mb >= 1000 ? `${(mb / 1000).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
 }
+function fmtSpeed(bytesPerSec: number | null | undefined) {
+  if (!bytesPerSec) return "";
+  return `${(bytesPerSec / 1024 / 1024).toFixed(1)} MB/s`;
+}
 
-const VIDEO_FORMATS = [
-  { id: "2160p60", label: "2160p60", ext: "MP4", detail: "AV1", mb: 1100, badge: "Best" },
-  { id: "1080p60", label: "1080p60", ext: "MP4", detail: "H.264", mb: 412 },
-  { id: "1080p", label: "1080p", ext: "WebM", detail: "VP9", mb: 298 },
-  { id: "720p", label: "720p", ext: "MP4", detail: "H.264", mb: 164 },
-  { id: "480p", label: "480p", ext: "MP4", detail: "H.264", mb: 88 },
-] as const;
+/* --------------------------------- types ---------------------------------- */
 
-const AUDIO_FORMATS = [
-  { id: "best-m4a", label: "Best audio", ext: "M4A", detail: "128 kbps", mb: 11.2, badge: "Best" },
-  { id: "mp3-320", label: "MP3 320", ext: "MP3", detail: "converted", mb: 28 },
-  { id: "opus-160", label: "Opus", ext: "OPUS", detail: "160 kbps", mb: 14 },
-  { id: "flac", label: "FLAC", ext: "FLAC", detail: "lossless", mb: 64 },
-] as const;
-
-const SUBS = [
-  { code: "en", label: "English", auto: false },
-  { code: "en-auto", label: "English", auto: true },
-  { code: "pt", label: "Portuguese", auto: false },
-  { code: "ja", label: "Japanese", auto: true },
-] as const;
-
-const TOPICS = [
-  "Setting up the environment", "Tensors from scratch", "Autograd internals",
-  "Building a linear layer", "Loss functions explained", "Backpropagation by hand",
-  "Optimizers: SGD to Adam", "Convolutions visually", "Recurrent networks",
-  "Attention mechanism", "Building a transformer block", "Tokenization strategies",
-  "Training loop from scratch", "Regularization techniques", "Batch normalization",
-  "Learning rate schedules", "Evaluating models", "Shipping to production",
-];
-
-const PLAYLIST_ITEMS = TOPICS.map((t, i) => ({
-  id: `pl-${i}`,
-  title: `Lesson ${i + 1}: ${t}`,
-  duration: 300 + ((i * 37) % 600),
-}));
-
-const SINGLE_VIDEO = {
-  title: "How Attention Actually Works — Building It From Scratch",
-  uploader: "Tunde Codes",
-  duration: 743,
-  views: "842K views",
-  uploaded: "2 weeks ago",
+type VideoFormat = {
+  formatId: string;
+  height: number;
+  ext: string;
+  vcodec: string;
+  hasAudio: boolean;
+  filesizeBytes: number | null;
+  fps: number | null;
 };
+type SubtitleTrack = { code: string; auto: boolean; label: string };
+type PlaylistEntry = { id: string; url: string; title: string; duration: number | null };
 
-const PLAYLIST = {
-  title: "Deep Learning From Scratch — Full Course",
-  uploader: "Tunde Codes",
-  count: PLAYLIST_ITEMS.length,
-  totalDuration: PLAYLIST_ITEMS.reduce((a, b) => a + b.duration, 0),
+type ResolvedVideo = {
+  type: "video";
+  title: string;
+  uploader: string;
+  duration: number;
+  thumbnail: string | null;
+  videoFormats: VideoFormat[];
+  hasAudio: boolean;
+  subtitles: SubtitleTrack[];
 };
+type ResolvedPlaylist = {
+  type: "playlist";
+  title: string;
+  uploader: string;
+  entries: PlaylistEntry[];
+};
+type ResolvedError = { type: "error"; message: string };
+type Resolved = ResolvedVideo | ResolvedPlaylist | ResolvedError;
+
+const AUDIO_CHOICES = [
+  { id: "best", label: "Best audio", ext: "M4A/original" },
+  { id: "mp3", label: "MP3", ext: "MP3 · converted" },
+  { id: "opus", label: "Opus", ext: "OPUS" },
+  { id: "flac", label: "FLAC", ext: "FLAC · lossless" },
+] as const;
 
 type Job = {
-  id: number;
+  id: string; // real jobId from the server
   title: string;
-  ext: string;
-  size: number; // MB, frozen at creation
-  speed: number; // MB/s, frozen at creation
+  status: string;
   progress: number;
+  downloadedBytes: number;
+  totalBytes: number | null;
+  speed: number | null;
+  error: string | null;
+  filename: string | null;
 };
-
-let jobSeq = 1;
 
 /* ---------------------------------- page ----------------------------------- */
 
 export default function ExtractPage() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  const [resolved, setResolved] = useState<"none" | "video" | "playlist">("none");
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const [resolved, setResolved] = useState<Resolved | null>(null);
 
   const [mode, setMode] = useState<"video" | "audio">("video");
-  const [format, setFormat] = useState<string>(VIDEO_FORMATS[1].id);
+  const [videoHeight, setVideoHeight] = useState<number | null>(null);
+  const [audioChoice, setAudioChoice] = useState<(typeof AUDIO_CHOICES)[number]["id"]>("best");
 
   const [subsOn, setSubsOn] = useState(false);
-  const [subLangs, setSubLangs] = useState<string[]>(["en"]);
+  const [subLangs, setSubLangs] = useState<string[]>([]);
   const [embedSubs, setEmbedSubs] = useState(true);
 
   const [clipOn, setClipOn] = useState(false);
-  const [clip, setClip] = useState<[number, number]>([0, SINGLE_VIDEO.duration]);
+  const [clip, setClip] = useState<[number, number]>([0, 0]);
 
   const [embedThumb, setEmbedThumb] = useState(true);
   const [embedMeta, setEmbedMeta] = useState(true);
   const [sponsorBlock, setSponsorBlock] = useState(false);
   const [saveChapters, setSaveChapters] = useState(false);
 
-  const [selected, setSelected] = useState<Set<string>>(new Set(PLAYLIST_ITEMS.map((i) => i.id)));
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [playlistOpen, setPlaylistOpen] = useState(false);
 
   const [queue, setQueue] = useState<Job[]>([]);
+  const pollersRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
 
-  function loadExample(kind: "video" | "playlist") {
+  async function resolveUrl() {
+    if (!url.trim()) return;
     setLoading(true);
-    setUrl(kind === "video" ? "https://youtube.com/watch?v=9fN2vX3ab" : "https://youtube.com/playlist?list=PLdl9k2exampl");
-    setTimeout(() => {
+    setResolveError(null);
+    setResolved(null);
+    try {
+      const res = await fetch("/api/extract/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: url.trim() }),
+      });
+      const data: Resolved = await res.json();
+      if (!res.ok || data.type === "error") {
+        setResolveError("message" in data ? data.message : "Could not resolve this link");
+        setResolved(null);
+      } else {
+        setResolved(data);
+        if (data.type === "video") {
+          setVideoHeight(data.videoFormats[0]?.height ?? null);
+          setClip([0, data.duration]);
+          setSubLangs(data.subtitles[0] ? [data.subtitles[0].code + (data.subtitles[0].auto ? "-auto" : "")] : []);
+        } else {
+          setSelected(new Set(data.entries.map((e) => e.id)));
+        }
+        setMode("video");
+      }
+    } catch {
+      setResolveError("Network error — could not reach the server");
+    } finally {
       setLoading(false);
-      setResolved(kind);
-      setMode("video");
-      setFormat(VIDEO_FORMATS[1].id);
-      setClip([0, kind === "video" ? SINGLE_VIDEO.duration : PLAYLIST_ITEMS[0].duration]);
-    }, 750);
+    }
   }
-
-  useEffect(() => {
-    setFormat(mode === "video" ? VIDEO_FORMATS[1].id : AUDIO_FORMATS[0].id);
-  }, [mode]);
-
-  const formats = mode === "video" ? VIDEO_FORMATS : AUDIO_FORMATS;
-  const activeFormat = formats.find((f) => f.id === format) ?? formats[0];
-  const selectedCount = resolved === "playlist" ? selected.size : 1;
-  const estimateMB = activeFormat.mb * (resolved === "playlist" ? Math.max(selectedCount, 1) : 1);
 
   function toggleSub(code: string) {
     setSubLangs((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
@@ -181,66 +188,125 @@ export default function ExtractPage() {
     });
   }
   function toggleAll() {
-    setSelected((prev) => (prev.size === PLAYLIST_ITEMS.length ? new Set() : new Set(PLAYLIST_ITEMS.map((i) => i.id))));
+    if (resolved?.type !== "playlist") return;
+    setSelected((prev) => (prev.size === resolved.entries.length ? new Set() : new Set(resolved.entries.map((e) => e.id))));
   }
 
-  function extract() {
-    const ext = activeFormat.ext;
-    const jobs: Job[] =
-      resolved === "playlist"
-        ? PLAYLIST_ITEMS.filter((i) => selected.has(i.id)).map((i) => ({
-            id: jobSeq++,
-            title: i.title,
-            ext,
-            size: activeFormat.mb,
-            speed: 2.5 + Math.random() * 4,
-            progress: 0,
-          }))
-        : [
-            {
-              id: jobSeq++,
-              title: SINGLE_VIDEO.title,
-              ext,
-              size: estimateMB,
-              speed: 2.5 + Math.random() * 4,
-              progress: 0,
-            },
-          ];
-    setQueue((prev) => [...jobs, ...prev]);
+  function pollJob(jobId: string) {
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/extract/status?jobId=${jobId}`);
+        const s = await res.json();
+        setQueue((prev) =>
+          prev.map((j) =>
+            j.id === jobId
+              ? {
+                  ...j,
+                  status: s.status,
+                  progress: s.progress ?? j.progress,
+                  downloadedBytes: s.downloadedBytes ?? j.downloadedBytes,
+                  totalBytes: s.totalBytes ?? j.totalBytes,
+                  speed: s.speed ?? null,
+                  error: s.error ?? null,
+                  filename: s.filename ?? j.filename,
+                }
+              : j
+          )
+        );
+        if (s.status === "done" || s.status === "error") {
+          clearInterval(id);
+          pollersRef.current.delete(jobId);
+        }
+      } catch {
+        // transient fetch failure — keep polling, next tick may succeed
+      }
+    }, 1000);
+    pollersRef.current.set(jobId, id);
   }
 
-  // progress ticker
   useEffect(() => {
-    if (queue.length === 0 || queue.every((j) => j.progress >= 100)) return;
-    const id = setInterval(() => {
-      setQueue((prev) =>
-        prev.map((j) => {
-          if (j.progress >= 100) return j;
-          const totalTimeSec = j.size / j.speed;
-          const delta = (0.5 / totalTimeSec) * 100;
-          return { ...j, progress: Math.min(100, j.progress + delta) };
-        })
-      );
-    }, 500);
-    return () => clearInterval(id);
-  }, [queue]);
+    return () => {
+      pollersRef.current.forEach((id) => clearInterval(id));
+    };
+  }, []);
 
-  function statusFor(p: number) {
-    if (p >= 100) return "Done";
-    if (p < 6) return "Fetching";
-    if (p < 94) return "Downloading";
-    return "Merging";
+  async function extract() {
+    if (!resolved) return;
+
+    const common = {
+      mode,
+      height: mode === "video" ? videoHeight ?? undefined : undefined,
+      audioFormat: mode === "audio" ? audioChoice : undefined,
+      subsOn,
+      subLangs,
+      embedSubs,
+      embedThumb,
+      embedMeta,
+      sponsorBlock,
+      saveChapters,
+    };
+
+    let items: Array<Record<string, unknown>> = [];
+    let titles: string[] = [];
+
+    if (resolved.type === "video") {
+      items = [{
+        ...common,
+        url,
+        clipOn,
+        clipStart: clipOn ? clip[0] : undefined,
+        clipEnd: clipOn ? clip[1] : undefined,
+      }];
+      titles = [resolved.title];
+    } else if (resolved.type === "playlist") {
+      const chosen = resolved.entries.filter((e) => selected.has(e.id));
+      items = chosen.map((e) => ({ ...common, url: e.url }));
+      titles = chosen.map((e) => e.title);
+    } else {
+      return; // resolved.type === "error" — extract() shouldn't be reachable here
+    }
+
+    const res = await fetch("/api/extract/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.jobIds) return;
+
+    const newJobs: Job[] = data.jobIds.map((jobId: string, i: number) => ({
+      id: jobId,
+      title: titles[i] ?? "Untitled",
+      status: "starting",
+      progress: 0,
+      downloadedBytes: 0,
+      totalBytes: null,
+      speed: null,
+      error: null,
+      filename: null,
+    }));
+    setQueue((prev) => [...newJobs, ...prev]);
+    newJobs.forEach((j) => pollJob(j.id));
   }
-  function cancelJob(id: number) {
+
+  function cancelJob(id: string) {
+    const poller = pollersRef.current.get(id);
+    if (poller) clearInterval(poller);
+    pollersRef.current.delete(id);
     setQueue((prev) => prev.filter((j) => j.id !== id));
   }
+
+  const isPlaylist = resolved?.type === "playlist";
+  const isVideo = resolved?.type === "video";
+  const activeVideoFormat = isVideo ? resolved.videoFormats.find((f) => f.height === videoHeight) : undefined;
+  const selectedCount = isPlaylist ? selected.size : 1;
 
   return (
     <div className={`${grotesk.variable} ${plexMono.variable} root`}>
       <header className="topbar">
-        <button className="iconbtn" aria-label="Back">
-          <IconBack />
-        </button>
+        <a className="iconbtn" href="/" aria-label="Back">
+          <svg width={20} height={20} viewBox="0 0 24 24" {...stroke}><path d="M15 5 8 12l7 7" /></svg>
+        </a>
         <div className="title">
           <span className="titleMain">Extract</span>
           <span className="titleSub">video &amp; audio, from any link</span>
@@ -253,22 +319,14 @@ export default function ExtractPage() {
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && resolveUrl()}
             placeholder="Paste a YouTube, Vimeo, or SoundCloud link"
           />
-          <button className="pastebtn" aria-label="Paste">
-            <IconPaste />
+          <button className="pastebtn" onClick={resolveUrl} aria-label="Resolve">
+            Go
           </button>
         </div>
-        {resolved === "none" && (
-          <div className="chipRow">
-            <button className="preset" onClick={() => loadExample("video")}>
-              Try a video
-            </button>
-            <button className="preset" onClick={() => loadExample("playlist")}>
-              Try a playlist
-            </button>
-          </div>
-        )}
+        {resolveError && <div className="errorBox">{resolveError}</div>}
       </div>
 
       {loading && (
@@ -282,55 +340,46 @@ export default function ExtractPage() {
         </div>
       )}
 
-      {!loading && resolved !== "none" && (
+      {!loading && resolved && resolved.type !== "error" && (
         <>
-          <div className="metastrip">
-            ≈ {fmtSize(estimateMB)} &nbsp;|&nbsp; {activeFormat.ext} &nbsp;|&nbsp; {activeFormat.detail}
-            {resolved === "playlist" && (
-              <>
-                {" "}
-                &nbsp;|&nbsp; {selectedCount} item{selectedCount === 1 ? "" : "s"}
-              </>
-            )}
-          </div>
-
-          {resolved === "video" && (
+          {isVideo && (
             <div className="card meta">
-              <div className="thumb" />
+              {resolved.thumbnail ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="thumb" src={resolved.thumbnail} alt="" />
+              ) : (
+                <div className="thumb" />
+              )}
               <div className="metaBody">
-                <span className="metaTitle">{SINGLE_VIDEO.title}</span>
+                <span className="metaTitle">{resolved.title}</span>
                 <span className="metaSub">
-                  <span className="avatar">{SINGLE_VIDEO.uploader[0]}</span>
-                  {SINGLE_VIDEO.uploader}
+                  <span className="avatar">{resolved.uploader[0]?.toUpperCase()}</span>
+                  {resolved.uploader}
                 </span>
-                <span className="metaLine">
-                  {fmtTime(SINGLE_VIDEO.duration)} &nbsp;·&nbsp; {SINGLE_VIDEO.views} &nbsp;·&nbsp; {SINGLE_VIDEO.uploaded}
-                </span>
+                <span className="metaLine">{fmtTime(resolved.duration)}</span>
               </div>
             </div>
           )}
 
-          {resolved === "playlist" && (
+          {isPlaylist && (
             <div className="card meta">
               <div className="thumb thumbStack" />
               <div className="metaBody">
-                <span className="metaTitle">{PLAYLIST.title}</span>
+                <span className="metaTitle">{resolved.title}</span>
                 <span className="metaSub">
-                  <span className="avatar">{PLAYLIST.uploader[0]}</span>
-                  {PLAYLIST.uploader}
+                  <span className="avatar">{resolved.uploader[0]?.toUpperCase()}</span>
+                  {resolved.uploader}
                 </span>
-                <span className="metaLine">
-                  {PLAYLIST.count} videos &nbsp;·&nbsp; {fmtTime(PLAYLIST.totalDuration)} total
-                </span>
+                <span className="metaLine">{resolved.entries.length} videos</span>
               </div>
             </div>
           )}
 
-          {resolved === "playlist" && (
+          {isPlaylist && (
             <div className="playlistBox">
               <button className="playlistHead" onClick={() => setPlaylistOpen((o) => !o)}>
                 <span>
-                  {selected.size} of {PLAYLIST.count} selected
+                  {selected.size} of {resolved.entries.length} selected
                 </span>
                 <span className={`chev ${playlistOpen ? "chevOpen" : ""}`}>
                   <IconChevronDown />
@@ -339,14 +388,14 @@ export default function ExtractPage() {
               {playlistOpen && (
                 <div className="playlistList">
                   <label className="plRow plAll">
-                    <input type="checkbox" checked={selected.size === PLAYLIST.count} onChange={toggleAll} />
+                    <input type="checkbox" checked={selected.size === resolved.entries.length} onChange={toggleAll} />
                     <span>Select all</span>
                   </label>
-                  {PLAYLIST_ITEMS.map((item) => (
+                  {resolved.entries.map((item) => (
                     <label key={item.id} className="plRow">
                       <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleItem(item.id)} />
                       <span className="plTitle">{item.title}</span>
-                      <span className="plDur">{fmtTime(item.duration)}</span>
+                      <span className="plDur">{item.duration ? fmtTime(item.duration) : ""}</span>
                     </label>
                   ))}
                 </div>
@@ -354,96 +403,159 @@ export default function ExtractPage() {
             </div>
           )}
 
-          <Section title="Extract as">
-            <div className="segment">
-              {(["video", "audio"] as const).map((m) => (
-                <button key={m} className={`segbtn ${mode === m ? "segActive" : ""}`} onClick={() => setMode(m)}>
-                  {m === "video" ? "Video" : "Audio only"}
-                </button>
-              ))}
-            </div>
-          </Section>
-
-          <Section title="Quality">
-            <div className="formatList">
-              {formats.map((f) => (
-                <button key={f.id} className={`formatRow ${format === f.id ? "formatActive" : ""}`} onClick={() => setFormat(f.id)}>
-                  <span className="formatRadio" />
-                  <span className="formatMain">
-                    <span className="formatLabel">
-                      {f.label}
-                      {"badge" in f && f.badge && <span className="badge">{f.badge}</span>}
-                    </span>
-                    <span className="formatDetail">
-                      {f.ext} &nbsp;·&nbsp; {f.detail}
-                    </span>
-                  </span>
-                  <span className="formatSize">{fmtSize(f.mb)}</span>
-                </button>
-              ))}
-            </div>
-          </Section>
-
-          <Section title="Subtitles">
-            <ToggleRow label="Include subtitles" checked={subsOn} onChange={setSubsOn} />
-            {subsOn && (
-              <>
-                <div className="chipRow">
-                  {SUBS.map((s) => (
-                    <button
-                      key={s.code}
-                      className={`preset ${subLangs.includes(s.code) ? "presetActive" : ""}`}
-                      onClick={() => toggleSub(s.code)}
-                    >
-                      {s.label}
-                      {s.auto ? " (auto)" : ""}
+          {isVideo && (
+            <>
+              <Section title="Extract as">
+                <div className="segment">
+                  {(["video", "audio"] as const).map((m) => (
+                    <button key={m} className={`segbtn ${mode === m ? "segActive" : ""}`} onClick={() => setMode(m)}>
+                      {m === "video" ? "Video" : "Audio only"}
                     </button>
                   ))}
                 </div>
-                <ToggleRow label="Embed in file" description="Off saves a separate .srt" checked={embedSubs} onChange={setEmbedSubs} />
-              </>
-            )}
-          </Section>
+              </Section>
 
-          {resolved === "video" && (
-            <Section title="Range">
-              <ToggleRow label="Extract a clip" description="Off downloads the full length" checked={clipOn} onChange={setClipOn} />
-              {clipOn && (
-                <>
-                  <Row label="In" value={fmtTime(clip[0])}>
-                    <input
-                      type="range"
-                      min={0}
-                      max={SINGLE_VIDEO.duration - 1}
-                      value={clip[0]}
-                      onChange={(e) => setClip([Math.min(+e.target.value, clip[1] - 1), clip[1]])}
-                    />
-                  </Row>
-                  <Row label="Out" value={fmtTime(clip[1])}>
-                    <input
-                      type="range"
-                      min={1}
-                      max={SINGLE_VIDEO.duration}
-                      value={clip[1]}
-                      onChange={(e) => setClip([clip[0], Math.max(+e.target.value, clip[0] + 1)])}
-                    />
-                  </Row>
-                </>
+              {mode === "video" && (
+                <Section title="Quality">
+                  <div className="formatList">
+                    {resolved.videoFormats.length === 0 && (
+                      <div className="emptyNote">No downloadable video formats were reported for this link.</div>
+                    )}
+                    {resolved.videoFormats.map((f) => (
+                      <button
+                        key={f.height}
+                        className={`formatRow ${videoHeight === f.height ? "formatActive" : ""}`}
+                        onClick={() => setVideoHeight(f.height)}
+                      >
+                        <span className="formatRadio" />
+                        <span className="formatMain">
+                          <span className="formatLabel">{f.height}p{f.fps && f.fps > 30 ? Math.round(f.fps) : ""}</span>
+                          <span className="formatDetail">
+                            {f.ext.toUpperCase()} &nbsp;·&nbsp; {f.vcodec}
+                            {!f.hasAudio && " · video only"}
+                          </span>
+                        </span>
+                        <span className="formatSize">{fmtBytes(f.filesizeBytes)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </Section>
+              )}
+
+              {mode === "audio" && (
+                <Section title="Format">
+                  <div className="formatList">
+                    {AUDIO_CHOICES.map((a) => (
+                      <button
+                        key={a.id}
+                        className={`formatRow ${audioChoice === a.id ? "formatActive" : ""}`}
+                        onClick={() => setAudioChoice(a.id)}
+                      >
+                        <span className="formatRadio" />
+                        <span className="formatMain">
+                          <span className="formatLabel">{a.label}</span>
+                          <span className="formatDetail">{a.ext}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </Section>
+              )}
+
+              {resolved.subtitles.length > 0 && (
+                <Section title="Subtitles">
+                  <ToggleRow label="Include subtitles" checked={subsOn} onChange={setSubsOn} />
+                  {subsOn && (
+                    <>
+                      <div className="chipRow">
+                        {resolved.subtitles.map((s) => {
+                          const code = s.code + (s.auto ? "-auto" : "");
+                          return (
+                            <button
+                              key={code}
+                              className={`preset ${subLangs.includes(code) ? "presetActive" : ""}`}
+                              onClick={() => toggleSub(code)}
+                            >
+                              {s.label}
+                              {s.auto ? " (auto)" : ""}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <ToggleRow label="Embed in file" description="Off saves a separate .srt" checked={embedSubs} onChange={setEmbedSubs} />
+                    </>
+                  )}
+                </Section>
+              )}
+
+              <Section title="Range">
+                <ToggleRow label="Extract a clip" description="Off downloads the full length" checked={clipOn} onChange={setClipOn} />
+                {clipOn && (
+                  <>
+                    <Row label="In" value={fmtTime(clip[0])}>
+                      <input
+                        type="range"
+                        min={0}
+                        max={Math.max(resolved.duration - 1, 0)}
+                        value={clip[0]}
+                        onChange={(e) => setClip([Math.min(+e.target.value, clip[1] - 1), clip[1]])}
+                      />
+                    </Row>
+                    <Row label="Out" value={fmtTime(clip[1])}>
+                      <input
+                        type="range"
+                        min={1}
+                        max={resolved.duration}
+                        value={clip[1]}
+                        onChange={(e) => setClip([clip[0], Math.max(+e.target.value, clip[0] + 1)])}
+                      />
+                    </Row>
+                  </>
+                )}
+              </Section>
+
+              <Section title="Extras">
+                <ToggleRow label="Embed thumbnail" checked={embedThumb} onChange={setEmbedThumb} />
+                <ToggleRow label="Embed metadata" description="Tags, uploader info" checked={embedMeta} onChange={setEmbedMeta} />
+                <ToggleRow label="Skip sponsor segments" description="via SponsorBlock" checked={sponsorBlock} onChange={setSponsorBlock} />
+                <ToggleRow label="Embed chapters" checked={saveChapters} onChange={setSaveChapters} />
+              </Section>
+            </>
+          )}
+
+          {isPlaylist && (
+            <Section title="Format">
+              <div className="segment">
+                {(["video", "audio"] as const).map((m) => (
+                  <button key={m} className={`segbtn ${mode === m ? "segActive" : ""}`} onClick={() => setMode(m)}>
+                    {m === "video" ? "Video (best)" : "Audio only"}
+                  </button>
+                ))}
+              </div>
+              {mode === "audio" && (
+                <div className="formatList">
+                  {AUDIO_CHOICES.map((a) => (
+                    <button
+                      key={a.id}
+                      className={`formatRow ${audioChoice === a.id ? "formatActive" : ""}`}
+                      onClick={() => setAudioChoice(a.id)}
+                    >
+                      <span className="formatRadio" />
+                      <span className="formatMain">
+                        <span className="formatLabel">{a.label}</span>
+                        <span className="formatDetail">{a.ext}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
               )}
             </Section>
           )}
 
-          <Section title="Extras">
-            <ToggleRow label="Embed thumbnail" checked={embedThumb} onChange={setEmbedThumb} />
-            <ToggleRow label="Embed metadata" description="Chapters, tags, uploader info" checked={embedMeta} onChange={setEmbedMeta} />
-            <ToggleRow label="Skip sponsor segments" description="via SponsorBlock" checked={sponsorBlock} onChange={setSponsorBlock} />
-            <ToggleRow label="Save chapters as .txt" checked={saveChapters} onChange={setSaveChapters} />
-          </Section>
-
           <div className="extractBarSpacer" />
           <div className="extractBar">
-            <button className="extractbtn" onClick={extract}>
-              {resolved === "playlist" ? `Extract ${selectedCount} item${selectedCount === 1 ? "" : "s"}` : "Extract"}
+            <button className="extractbtn" onClick={extract} disabled={isPlaylist && selectedCount === 0}>
+              {isPlaylist ? `Extract ${selectedCount} item${selectedCount === 1 ? "" : "s"}` : "Extract"}
             </button>
           </div>
         </>
@@ -453,33 +565,37 @@ export default function ExtractPage() {
         <div className="queueSection">
           <span className="queueTitle">Queue · {queue.length}</span>
           <div className="queueList">
-            {queue.map((j) => {
-              const status = statusFor(j.progress);
-              const remainingSec = Math.max(0, ((100 - j.progress) / 100) * (j.size / j.speed));
-              return (
-                <div key={j.id} className="queueRow">
-                  <div className="queueTop">
-                    <span className="queueName">{j.title}</span>
-                    {status === "Done" ? (
-                      <span className="doneIcon">
-                        <IconCheck />
-                      </span>
-                    ) : (
-                      <button className="cancelbtn" onClick={() => cancelJob(j.id)} aria-label="Cancel">
-                        <IconX />
-                      </button>
-                    )}
-                  </div>
-                  <div className="queueBar">
-                    <div className="queueFill" style={{ width: `${j.progress}%` }} />
-                  </div>
-                  <div className="queueMeta">
-                    <span>{status}</span>
-                    <span>{status === "Done" ? fmtSize(j.size) : `${j.speed.toFixed(1)} MB/s · ${fmtTime(remainingSec)} left`}</span>
-                  </div>
+            {queue.map((j) => (
+              <div key={j.id} className="queueRow">
+                <div className="queueTop">
+                  <span className="queueName">{j.title}</span>
+                  {j.status === "done" ? (
+                    <a className="doneIcon" href={`/api/extract/file?jobId=${j.id}`} aria-label="Download">
+                      <IconDownload />
+                    </a>
+                  ) : (
+                    <button className="cancelbtn" onClick={() => cancelJob(j.id)} aria-label="Cancel">
+                      <IconX />
+                    </button>
+                  )}
                 </div>
-              );
-            })}
+                <div className="queueBar">
+                  <div className="queueFill" style={{ width: `${j.progress}%` }} />
+                </div>
+                <div className="queueMeta">
+                  <span>
+                    {j.status === "error" ? <span className="errText">{j.error ?? "Failed"}</span> : j.status}
+                  </span>
+                  <span>
+                    {j.status === "done"
+                      ? fmtBytes(j.totalBytes)
+                      : j.status === "downloading"
+                      ? `${fmtSpeed(j.speed)} · ${fmtBytes(j.downloadedBytes)} / ${fmtBytes(j.totalBytes)}`
+                      : ""}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -521,6 +637,7 @@ export default function ExtractPage() {
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
+          color: var(--ink);
         }
         .title {
           display: flex;
@@ -564,9 +681,25 @@ export default function ExtractPage() {
         }
         .pastebtn {
           border: none;
-          background: transparent;
-          color: var(--ink-soft);
+          background: var(--ink);
+          color: #fff;
           flex-shrink: 0;
+          font-size: 12.5px;
+          font-weight: 600;
+          padding: 6px 12px;
+          border-radius: 9px;
+        }
+        .errorBox {
+          font-size: 12.5px;
+          color: #b3261e;
+          background: #fdecea;
+          border: 1px solid #f6c6c1;
+          border-radius: 10px;
+          padding: 8px 12px;
+        }
+        .emptyNote {
+          font-size: 13px;
+          color: var(--ink-soft);
         }
 
         .card {
@@ -612,13 +745,6 @@ export default function ExtractPage() {
           }
         }
 
-        .metastrip {
-          padding: 0 16px 12px;
-          font-family: var(--font-mono), monospace;
-          font-size: 12px;
-          color: var(--render);
-        }
-
         .meta {
           display: flex;
           gap: 12px;
@@ -628,6 +754,7 @@ export default function ExtractPage() {
           height: 64px;
           border-radius: 10px;
           flex-shrink: 0;
+          object-fit: cover;
           background: linear-gradient(155deg, #3a4a7a 0%, #b8618f 42%, #f2a34f 78%, #ffd98e 100%);
         }
         .thumbStack {
@@ -803,14 +930,6 @@ export default function ExtractPage() {
           align-items: center;
           gap: 6px;
         }
-        .badge {
-          font-size: 10px;
-          font-weight: 600;
-          color: var(--render);
-          background: #e6f7f1;
-          padding: 1px 6px;
-          border-radius: 999px;
-        }
         .formatDetail {
           font-size: 12px;
           color: var(--ink-soft);
@@ -857,6 +976,9 @@ export default function ExtractPage() {
           font-size: 15px;
           font-weight: 600;
           font-family: var(--font-sans), sans-serif;
+        }
+        .extractbtn:disabled {
+          opacity: 0.5;
         }
 
         .queueSection {
@@ -909,6 +1031,13 @@ export default function ExtractPage() {
           color: var(--render);
           display: flex;
           flex-shrink: 0;
+          width: 22px;
+          height: 22px;
+          align-items: center;
+          justify-content: center;
+        }
+        .errText {
+          color: #b3261e;
         }
         .queueBar {
           height: 5px;

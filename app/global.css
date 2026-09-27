@@ -18,7 +18,7 @@
   --ink-soft: #5b6065;
   --accent: #2f5fed;
   --render: #17a673;
-  font-family: system-ui, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
   color: var(--ink);
   background: var(--bg);
   max-width: 560px;

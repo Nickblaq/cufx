@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.railpack.com",
-  "provider": "node", 
+  "provider": "node",
   "packages": {
     "node": "22",
     "python": "3.13"
@@ -13,7 +13,7 @@
       ],
       "commands": [
         "npm install",
-        "pip install -r requirements.txt"
+        "pip install -r requirements.txt --target ./python-modules"
       ]
     },
     "build": {

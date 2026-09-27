@@ -46,12 +46,29 @@ export async function runPythonJSON<T = unknown>(
   args: string[]
 ): Promise<T> {
   const scriptPath = path.join(process.cwd(), "python", scriptName);
-  const { stdout } = await execFileAsync("python3", [scriptPath, ...args], {
-    maxBuffer: 1024 * 1024 * 32,
-    env: pythonEnv(),
-  });
-  return JSON.parse(stdout) as T;
+  try {
+    const { stdout } = await execFileAsync("python3", [scriptPath, ...args], {
+      maxBuffer: 1024 * 1024 * 32,
+      env: pythonEnv(),
+    });
+    return JSON.parse(stdout) as T;
+  } catch (err: any) {
+    // yt-dlp scripts intentionally print a structured {type:"error", ...}
+    // blob to stdout and exit(1) on failure. A non-zero exit code makes
+    // execFile reject the promise no matter what was printed — so recover
+    // the JSON from the rejected error before treating this as a real crash.
+    if (err?.stdout) {
+      try {
+        return JSON.parse(err.stdout) as T;
+      } catch {
+        // stdout wasn't JSON either — fall through to the real error below
+      }
+    }
+    const stderr = err?.stderr ? `\n${err.stderr}` : "";
+    throw new Error(`${scriptName} failed: ${err?.message ?? "unknown error"}${stderr}`);
+  }
 }
+
 
 /**
  * Fires off a long-running python download in the background (does not

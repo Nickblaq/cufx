@@ -13,6 +13,13 @@ export async function callPython<T = unknown>(
   args: string[] = []
 ): Promise<T> {
   const scriptPath = path.join(process.cwd(), "python", scriptName);
-  const { stdout } = await execFileAsync("python3", [scriptPath, ...args]);
+  const pythonModulesPath = path.join(process.cwd(), "python-modules");
+
+  const { stdout } = await execFileAsync("python3", [scriptPath, ...args], {
+    env: {
+      ...process.env,
+      PYTHONPATH: pythonModulesPath,
+    },
+  });
   return JSON.parse(stdout) as T;
 }

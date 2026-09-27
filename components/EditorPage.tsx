@@ -1,19 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
-
-const grotesk = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-sans",
-  weight: ["400", "500", "600", "700"],
-});
-
-const plexMono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-  weight: ["400", "500", "600"],
-});
 
 /* ---------------------------------- icons --------------------------------- */
 /* Hand-drawn, single stroke weight, no icon library dependency. */
@@ -429,7 +416,7 @@ export default function EditorPage() {
   if (lut !== "none") pipeline.push(`Filter · ${activeLut.label}`);
 
   return (
-    <div className={`${grotesk.variable} ${plexMono.variable} root`}>
+    <div>
       {/* top bar */}
       <header className="topbar">
         <button className="iconbtn" aria-label="Back">

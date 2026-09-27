@@ -158,7 +158,7 @@ export default function ExtractPage() {
       const data: Resolved = await res.json();
       if (!res.ok || data.type === "error") {
         console.log("Link Error", data)
-        setResolveError("message" in data ? data.message : "Could not resolve this link");
+        setResolveError("message" in data ? data.message : data );
         setResolved(null);
       } else {
         setResolved(data);

@@ -63,7 +63,8 @@ def pick_subtitles(info: dict):
 def main():
     url = sys.argv[1]
     ydl_opts = {
-        "quiet": True,
+        'verbose': True,
+        "quiet": False,
         "no_warnings": True,
         "skip_download": True,
         "extract_flat": "in_playlist",  # don't resolve every entry's formats up front

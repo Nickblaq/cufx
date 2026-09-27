@@ -416,7 +416,7 @@ export default function EditorPage() {
   if (lut !== "none") pipeline.push(`Filter · ${activeLut.label}`);
 
   return (
-    <div>
+    <div className="root">
       {/* top bar */}
       <header className="topbar">
         <button className="iconbtn" aria-label="Back">
@@ -725,28 +725,6 @@ export default function EditorPage() {
       )}
 
       <style jsx>{`
-        :global(html, body) {
-          background: #f6f6f3;
-        }
-        .root {
-          --bg: #f6f6f3;
-          --surface: #ffffff;
-          --border: #e3e3df;
-          --ink: #14171a;
-          --ink-soft: #5b6065;
-          --accent: #2f5fed;
-          --render: #17a673;
-          font-family: var(--font-sans), system-ui, sans-serif;
-          color: var(--ink);
-          background: var(--bg);
-          max-width: 560px;
-          margin: 0 auto;
-          min-height: 100vh;
-          display: flex;
-          flex-direction: column;
-          padding-bottom: 12px;
-        }
-
         .topbar {
           display: flex;
           align-items: center;
@@ -1181,7 +1159,7 @@ function Row({ label, value, children }: { label: string; value: string; childre
           font-size: 13px;
         }
         .rowHead span:first-child {
-          color: #5b6065;
+          color: var(--ink-soft);
         }
         .rowHead span:last-child {
           font-family: var(--font-mono), monospace;

@@ -195,7 +195,7 @@ const PHOTO_FORMATS = [
   { id: "png", label: "PNG", base: 2400 },
 ] as const;
 
-const DURATION = 24.6;
+const DURATION = 24.6; // fallback shown before any clip is uploaded
 
 /* ---------------------------------- page ----------------------------------- */
 
@@ -211,6 +211,17 @@ export default function EditorPage() {
   const [volume, setVolume] = useState(80);
   const [bitrate, setBitrate] = useState(3000); // kbps
   const [vFormat, setVFormat] = useState<(typeof VIDEO_FORMATS)[number]["id"]>("mp4");
+
+  // video state — real upload, native playback, and real export
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const videoFileRef = useRef<File | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoDuration, setVideoDuration] = useState(DURATION);
+  const [videoNaturalSize, setVideoNaturalSize] = useState({ width: 0, height: 0 });
+  const [videoExporting, setVideoExporting] = useState(false);
+  const [videoExportError, setVideoExportError] = useState<string | null>(null);
+  const [videoExportedUrl, setVideoExportedUrl] = useState<string | null>(null);
+  const [videoExportedBytes, setVideoExportedBytes] = useState<number | null>(null);
 
   // photo state
   const [aspect, setAspect] = useState<(typeof ASPECTS)[number]["id"]>("4:5");
@@ -250,21 +261,26 @@ export default function EditorPage() {
     setTool(null);
   }, [mode]);
 
-  // fake playback loop, clamped to trim range
-  useEffect(() => {
-    if (!playing) return;
-    const id = setInterval(() => {
-      setPlayhead((p) => {
-        const next = p + 0.2 * speed;
-        return next >= trim[1] ? trim[0] : next;
-      });
-    }, 200);
-    return () => clearInterval(id);
-  }, [playing, speed, trim]);
-
+  // Keep the displayed playhead (and, once a real clip is loaded, the
+  // actual <video> position) inside the current trim range whenever the
+  // trim handles move.
   useEffect(() => {
     setPlayhead((p) => Math.min(Math.max(p, trim[0]), trim[1]));
+    const el = videoRef.current;
+    if (el && (el.currentTime < trim[0] || el.currentTime > trim[1])) {
+      el.currentTime = trim[0];
+    }
   }, [trim]);
+
+  // Keep the real element's playback rate and volume in sync with the
+  // sliders — this is the same "live preview matches export" principle
+  // as the photo canvas filter, just for audio/time instead of pixels.
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.playbackRate = speed;
+  }, [speed, videoUrl]);
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.volume = Math.min(1, volume / 100);
+  }, [volume, videoUrl]);
 
   const activeLut = LUTS.find((l) => l.id === lut)!;
   const lutMix = lutIntensity / 100;
@@ -280,16 +296,23 @@ export default function EditorPage() {
     return { brightnessPct: b, contrastPct: c, saturationPct: s, hueDeg: h };
   }, [brightness, contrast, saturation, activeLut, lutMix]);
 
+  // Same idea for video: these exact numbers drive both the live CSS
+  // filter on the <video> preview and the ffmpeg eq/hue filters on export.
+  const videoAdjust = useMemo(() => {
+    const c = 100 + (activeLut.con - 100) * lutMix;
+    const s = 100 + (activeLut.sat - 100) * lutMix;
+    const h = activeLut.hue * lutMix;
+    return { contrastPct: c, saturationPct: s, hueDeg: h };
+  }, [activeLut, lutMix]);
+
   const previewFilter = useMemo(() => {
     if (mode === "photo") {
       const { brightnessPct, contrastPct, saturationPct, hueDeg } = photoAdjust;
       return `brightness(${brightnessPct}%) contrast(${contrastPct}%) saturate(${saturationPct}%) hue-rotate(${hueDeg}deg)`;
     }
-    const c = 100 + (activeLut.con - 100) * lutMix;
-    const s = 100 + (activeLut.sat - 100) * lutMix;
-    const h = activeLut.hue * lutMix;
-    return `contrast(${c}%) saturate(${s}%) hue-rotate(${h}deg)`;
-  }, [mode, brightness, contrast, saturation, activeLut, lutMix]);
+    const { contrastPct, saturationPct, hueDeg } = videoAdjust;
+    return `contrast(${contrastPct}%) saturate(${saturationPct}%) hue-rotate(${hueDeg}deg)`;
+  }, [mode, photoAdjust, videoAdjust]);
 
   const clipDuration = trim[1] - trim[0];
   const estVideoMB = (bitrate * clipDuration) / 8 / 1000;
@@ -437,10 +460,84 @@ export default function EditorPage() {
     }
   }
 
+  /* ---------------------------- real video pipeline ---------------------------- */
+
+  function handleVideoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    videoFileRef.current = file;
+    const url = URL.createObjectURL(file);
+    setVideoUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return url;
+    });
+    setVideoExportedUrl(null);
+    setVideoExportError(null);
+    setPlaying(false);
+  }
+
+  // Real duration replaces the fixed mockup constant the moment a clip
+  // loads — trim bounds, the duration readout, and the size estimate all
+  // key off this from here on.
+  function handleVideoLoadedMetadata(e: React.SyntheticEvent<HTMLVideoElement>) {
+    const el = e.currentTarget;
+    const dur = el.duration || DURATION;
+    setVideoDuration(dur);
+    setVideoNaturalSize({ width: el.videoWidth, height: el.videoHeight });
+    setTrim([0, dur]);
+    setPlayhead(0);
+  }
+
+  // Jumps the real element to a given time — used so dragging a trim
+  // handle shows the actual in/out frame, not just a number updating.
+  function seekTo(time: number) {
+    if (videoRef.current) videoRef.current.currentTime = time;
+    setPlayhead(time);
+  }
+
+  async function handleExportVideo() {
+    const file = videoFileRef.current;
+    if (!file) return;
+    setVideoExporting(true);
+    setVideoExportError(null);
+    try {
+      const ops = {
+        trimStart: trim[0],
+        trimEnd: trim[1],
+        speed,
+        volume,
+        contrastPct: videoAdjust.contrastPct,
+        saturationPct: videoAdjust.saturationPct,
+        hueDeg: videoAdjust.hueDeg,
+        format: vFormat,
+        bitrateKbps: bitrate,
+      };
+      const form = new FormData();
+      form.append("file", file);
+      form.append("ops", JSON.stringify(ops));
+
+      const res = await fetch("/api/video/process", { method: "POST", body: form });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Server returned ${res.status}`);
+      }
+      const blob = await res.blob();
+      setVideoExportedUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return URL.createObjectURL(blob);
+      });
+      setVideoExportedBytes(blob.size);
+    } catch (err) {
+      setVideoExportError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setVideoExporting(false);
+    }
+  }
+
   // derived, read-only "edit pipeline" chips
   const pipeline: string[] = [];
   if (mode === "video") {
-    if (trim[0] > 0.2 || trim[1] < DURATION - 0.2) pipeline.push(`Trim ${fmtTime(trim[0])}–${fmtTime(trim[1])}`);
+    if (trim[0] > 0.2 || trim[1] < videoDuration - 0.2) pipeline.push(`Trim ${fmtTime(trim[0])}–${fmtTime(trim[1])}`);
     if (speed !== 1) pipeline.push(`Speed ${speed}×`);
     if (volume !== 100) pipeline.push(`Volume ${volume}%`);
   } else {
@@ -462,7 +559,9 @@ export default function EditorPage() {
           <span className="titleMain">Untitled edit</span>
           <span className="titleSub">
             {mode === "video"
-              ? "video · 1080×1350"
+              ? videoNaturalSize.width
+                ? `video · ${videoNaturalSize.width}×${videoNaturalSize.height}`
+                : "video · no file loaded"
               : naturalSize.width
               ? `photo · ${naturalSize.width}×${naturalSize.height}`
               : "photo · no file loaded"}
@@ -470,16 +569,25 @@ export default function EditorPage() {
         </div>
         <button
           className="exportbtn"
-          onClick={mode === "photo" ? handleExport : undefined}
-          disabled={mode === "photo" && (!photoUrl || exporting)}
+          onClick={mode === "photo" ? handleExport : handleExportVideo}
+          disabled={
+            (mode === "photo" && (!photoUrl || exporting)) ||
+            (mode === "video" && (!videoUrl || videoExporting))
+          }
         >
-          {mode === "photo" && exporting ? "Exporting…" : "Export"}
+          {mode === "photo" ? (exporting ? "Exporting…" : "Export") : videoExporting ? "Exporting…" : "Export"}
         </button>
       </header>
 
       <div className="metastrip">
         {mode === "video" ? (
-          <span>≈ {estVideoMB.toFixed(1)} MB &nbsp;|&nbsp; {codec} &nbsp;|&nbsp; {fmtTime(clipDuration)}</span>
+          videoExportedUrl && videoExportedBytes ? (
+            <span>
+              {(videoExportedBytes / 1024 / 1024).toFixed(1)} MB (actual) &nbsp;|&nbsp; {codec} &nbsp;|&nbsp; {fmtTime(clipDuration)}
+            </span>
+          ) : (
+            <span>≈ {estVideoMB.toFixed(1)} MB &nbsp;|&nbsp; {codec} &nbsp;|&nbsp; {fmtTime(clipDuration)}</span>
+          )
         ) : exportedUrl && exportedBytes ? (
           <span>
             {(exportedBytes / 1024).toFixed(0)} KB (actual) &nbsp;|&nbsp; {pFormat.toUpperCase()} &nbsp;|&nbsp; q{quality}
@@ -488,6 +596,13 @@ export default function EditorPage() {
           <span>≈ {estPhotoKB} KB &nbsp;|&nbsp; {pFormat.toUpperCase()} &nbsp;|&nbsp; q{quality}</span>
         )}
       </div>
+
+      {mode === "video" && videoExportError && <div className="exportError">{videoExportError}</div>}
+      {mode === "video" && videoExportedUrl && !videoExportError && (
+        <a className="exportDone" href={videoExportedUrl} download={`edit.${vFormat}`}>
+          <IconDownload /> Download exported video
+        </a>
+      )}
 
       {mode === "photo" && exportError && <div className="exportError">{exportError}</div>}
       {mode === "photo" && exportedUrl && !exportError && (
@@ -524,11 +639,48 @@ export default function EditorPage() {
                 ? naturalSize.width
                   ? `${naturalSize.width} / ${naturalSize.height}` // full image, 1:1 with canvas pixels so the crop overlay lines up exactly
                   : ASPECTS.find((a) => a.id === aspect)!.ratio // no photo yet — fall back to a sensible placeholder shape
+                : videoNaturalSize.width
+                ? `${videoNaturalSize.width} / ${videoNaturalSize.height}`
                 : "9 / 16",
-            filter: mode === "photo" && !photoUrl ? undefined : previewFilter,
+            filter:
+              (mode === "photo" && !photoUrl) || (mode === "video" && !videoUrl) ? undefined : previewFilter,
           }}
         >
-          {mode === "video" && <div className="previewArt" />}
+          {mode === "video" && !videoUrl && (
+            <label className="uploadPrompt">
+              <IconUpload />
+              <span>Upload a video to start editing</span>
+              <input type="file" accept="video/*" onChange={handleVideoFileChange} hidden />
+            </label>
+          )}
+
+          {mode === "video" && videoUrl && (
+            <>
+              <video
+                ref={videoRef}
+                src={videoUrl}
+                className="videoEl"
+                playsInline
+                onLoadedMetadata={handleVideoLoadedMetadata}
+                onTimeUpdate={(e) => {
+                  const t = e.currentTarget.currentTime;
+                  if (t >= trim[1]) {
+                    e.currentTarget.currentTime = trim[0];
+                    setPlayhead(trim[0]);
+                  } else {
+                    setPlayhead(t);
+                  }
+                }}
+                onPlay={() => setPlaying(true)}
+                onPause={() => setPlaying(false)}
+                onEnded={() => setPlaying(false)}
+              />
+              <label className="replaceBtn">
+                Replace
+                <input type="file" accept="video/*" onChange={handleVideoFileChange} hidden />
+              </label>
+            </>
+          )}
 
           {mode === "photo" && !photoUrl && (
             <label className="uploadPrompt">
@@ -583,11 +735,29 @@ export default function EditorPage() {
 
         {mode === "video" && (
           <div className="playbar">
-            <button className="playbtn" onClick={() => setPlaying((p) => !p)} aria-label={playing ? "Pause" : "Play"}>
+            <button
+              className="playbtn"
+              onClick={() => {
+                const el = videoRef.current;
+                if (!el) return;
+                if (el.paused) el.play();
+                else el.pause();
+              }}
+              disabled={!videoUrl}
+              aria-label={playing ? "Pause" : "Play"}
+            >
               {playing ? <IconPause /> : <IconPlay />}
             </button>
             <span className="timecode">{fmtTime(playhead)}</span>
-            <div className="scrubTrack">
+            <div
+              className="scrubTrack"
+              onPointerDown={(e) => {
+                if (!videoUrl) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const frac = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
+                seekTo(trim[0] + frac * (trim[1] - trim[0]));
+              }}
+            >
               <div
                 className="scrubFill"
                 style={{ width: `${((playhead - trim[0]) / (trim[1] - trim[0])) * 100}%` }}
@@ -602,7 +772,8 @@ export default function EditorPage() {
         )}
       </div>
 
-      {/* filmstrip + waveform, video only */}
+      {/* filmstrip + waveform, video only — decorative; a real one would
+          need a separate frame/audio extraction pipeline, out of scope here */}
       {mode === "video" && (
         <div className="filmstrip">
           <div className="frames">
@@ -673,23 +844,31 @@ export default function EditorPage() {
                     <input
                       type="range"
                       min={0}
-                      max={DURATION - 1}
+                      max={videoDuration - 1}
                       step={0.1}
                       value={trim[0]}
-                      onChange={(e) => setTrim([Math.min(+e.target.value, trim[1] - 1), trim[1]])}
+                      onChange={(e) => {
+                        const v = Math.min(+e.target.value, trim[1] - 1);
+                        setTrim([v, trim[1]]);
+                        seekTo(v);
+                      }}
                     />
                   </Row>
                   <Row label="Out" value={fmtTime(trim[1])}>
                     <input
                       type="range"
                       min={1}
-                      max={DURATION}
+                      max={videoDuration}
                       step={0.1}
                       value={trim[1]}
-                      onChange={(e) => setTrim([trim[0], Math.max(+e.target.value, trim[0] + 1)])}
+                      onChange={(e) => {
+                        const v = Math.max(+e.target.value, trim[0] + 1);
+                        setTrim([trim[0], v]);
+                        seekTo(v);
+                      }}
                     />
                   </Row>
-                  <p className="sheetNote">Duration {fmtTime(clipDuration)} of {fmtTime(DURATION)}</p>
+                  <p className="sheetNote">Duration {fmtTime(clipDuration)} of {fmtTime(videoDuration)}</p>
                 </>
               )}
 
@@ -713,7 +892,7 @@ export default function EditorPage() {
                   <Row label="Volume" value={`${volume}%`}>
                     <input type="range" min={0} max={150} value={volume} onChange={(e) => setVolume(+e.target.value)} />
                   </Row>
-                  <p className="sheetNote">Waveform above reflects the current mix. Extraction and noise reduction run through ffmpeg's audio filters.</p>
+                  <p className="sheetNote">Live preview is capped at 100% (browser limit) — export applies the full value via ffmpeg, so boosts above 100% only show up in the exported file.</p>
                 </>
               )}
 
@@ -952,17 +1131,13 @@ export default function EditorPage() {
           background: #111;
           transition: filter 120ms ease, aspect-ratio 200ms ease;
         }
-        .previewArt {
+        .videoEl {
           position: absolute;
           inset: 0;
-          background: linear-gradient(155deg, #3a4a7a 0%, #b8618f 42%, #f2a34f 78%, #ffd98e 100%);
-        }
-        .previewArt::after {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.25), transparent 55%),
-            radial-gradient(circle at 75% 85%, rgba(0, 0, 0, 0.35), transparent 60%);
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          background: #000;
         }
         .photoCanvas {
           position: absolute;
@@ -1054,6 +1229,9 @@ export default function EditorPage() {
           justify-content: center;
           flex-shrink: 0;
         }
+        .playbtn:disabled {
+          opacity: 0.4;
+        }
         .timecode {
           font-family: var(--font-mono), monospace;
           font-size: 12px;
@@ -1069,6 +1247,7 @@ export default function EditorPage() {
           height: 4px;
           border-radius: 2px;
           background: var(--border);
+          touch-action: none;
         }
         .scrubFill {
           position: absolute;

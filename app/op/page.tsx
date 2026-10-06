@@ -789,6 +789,7 @@ export default function OperationStudio() {
           font-weight: 700;
         }
 
+        
         .catalog {
           padding: 0 16px 24px;
           display: flex;
@@ -991,14 +992,24 @@ export default function OperationStudio() {
           -webkit-appearance: none;
           appearance: none;
         }
-        select {
-          background-image: linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%),
-            linear-gradient(135deg, var(--ink-soft) 50%, transparent 50%);
-          background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
-          background-size: 5px 5px, 5px 5px;
-          background-repeat: no-repeat;
-          padding-right: 34px;
-        }
+select {
+  width: 100%;
+  display: block;
+  padding: 10px 34px 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background-color: var(--bg);
+  color: var(--ink);
+  font-size: 16px;              /* prevents iOS zoom-on-focus */
+  font-family: var(--font-sans), sans-serif;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235b6065' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
         input[type="range"] {
           -webkit-appearance: none;
           width: 100%;
@@ -1027,25 +1038,30 @@ export default function OperationStudio() {
           height: 16px;
           accent-color: var(--accent);
         }
-        .chipRow {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-        }
-        .preset {
-          border: 1px solid var(--border);
-          background: var(--surface);
-          padding: 6px 12px;
-          border-radius: 999px;
-          font-size: 12.5px;
-          color: var(--ink);
-          font-family: var(--font-mono), monospace;
-        }
-        .presetActive {
-          background: var(--ink);
-          color: #fff;
-          border-color: var(--ink);
-        }
+.chipRow {
+  display: flex;
+  gap: 8px;
+  row-gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.preset {
+  border: 1px solid var(--border);
+  background: var(--bg);       /* was var(--surface) — contrasts against the white sheet */
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-family: var(--font-mono), monospace;
+  line-height: 1.2;
+  color: var(--ink);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.presetActive {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
 
         @media (min-width: 640px) {
           .preview {

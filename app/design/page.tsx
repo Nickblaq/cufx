@@ -102,7 +102,7 @@ const RECEIPT: Template = {
     { id: "total", type: "text", name: "Total", x: 24, y: 406, w: 332, h: 22, text: "TOTAL                          $31.88", fontSize: 15, fontWeight: 700, color: "#14171a" },
     { id: "d5", type: "line", name: "Divider", x: 24, y: 438, w: 332, h: 1, bg: "#c9c9c4" },
     { id: "pay", type: "text", name: "Payment", x: 24, y: 448, w: 332, h: 14, text: "VISA ···· 4242         AUTH 018492", fontSize: 11, color: "#5b6065" },
-    { id: "qr", type: "qrcode", name: "QR code", x: 130, y: 486, w: 120, h: 120 },
+    { id: "qr", type: "qrcode", name: "QR code", x: 130, y: 486, w: 120, h: 120, text: "https://example.com/receipt/018492" },
     { id: "foot", type: "text", name: "Footer", x: 24, y: 624, w: 332, h: 16, text: "THANK YOU — COME AGAIN", fontSize: 12, fontWeight: 600, color: "#14171a", align: "center" },
     { id: "footsub", type: "text", name: "Footer sub", x: 24, y: 644, w: 332, h: 14, text: "Return within 14 days with receipt", fontSize: 10, color: "#5b6065", align: "center" },
   ],
@@ -171,7 +171,7 @@ const useDesignStore = create<StoreState>()(
 
 /** Reactive hook for temporal (undo/redo) state. */
 function useTemporalStore<T>(selector: (state: TemporalState<StoreState>) => T): T {
-  return useStoreWithEqualityFn(useDesignStore.temporal, selector);
+  return useStore(useDesignStore.temporal, useShallow(selector));
 }
 
 /* ---------------------------------- icons --------------------------------- */
@@ -281,19 +281,22 @@ function BarcodeView({ value, format, w, h }: { value: string; format: string; w
     if (!el) return;
     el.innerHTML = "";
     try {
-      // Dynamic import keeps jsbarcode out of the initial bundle.
       import("jsbarcode").then(({ default: JsBarcode }) => {
-        JsBarcode(el, value || "000000", {
-          format: format || "CODE128",
-          width: 2,
-          height: Math.max(20, h - 10),
-          displayValue: false,
-          margin: 0,
-          background: "transparent",
-        });
+        if (!ref.current) return;
+        try {
+          JsBarcode(el, value || "000000", {
+            format: format || "CODE128",
+            width: 2,
+            height: Math.max(20, h - 10),
+            displayValue: false,
+            margin: 0,
+            background: "transparent",
+          });
+        } catch {
+          el.innerHTML = `<rect width="${w}" height="${h}" fill="#e3e3df" />`;
+        }
       });
     } catch {
-      // Fallback: render a placeholder pattern if the library fails.
       el.innerHTML = `<rect width="${w}" height="${h}" fill="#e3e3df" />`;
     }
   }, [value, format, w, h]);
@@ -480,10 +483,12 @@ export default function DesignStudio() {
     resetTemplate,
   } = useDesignStore();
 
-/** Reactive hook for temporal (undo/redo) state. */
-function useTemporalStore<T>(selector: (state: TemporalState<StoreState>) => T): T {
-  return useStore(useDesignStore.temporal, useShallow(selector));
-}
+  const { undo, redo, pastStates, futureStates } = useTemporalStore((s) => ({
+    undo: s.undo,
+    redo: s.redo,
+    pastStates: s.pastStates,
+    futureStates: s.futureStates,
+  }));
 
   const template = TEMPLATES.find((t) => t.id === templateId)!;
   const { ref: stageRef, scale } = useStageScale(template.width);

@@ -535,7 +535,7 @@ const OPERATIONS: Operation[] = [
   },
 
   /* ===== Tier 5: Preset Pipelines ===== */
-", label  {
+  {
     id: "music-pipeline", name: "YouTube Music Pipeline", description: "Download audio, convert to MP3 320k, embed metadata + thumbnail.",
     tier: 5, category: "chain", icon: I.Music, favorite: true, chainSteps: ["audio-mp3", "embed-thumbnail", "embed-metadata"],
     params: [

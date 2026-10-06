@@ -2,9 +2,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { create } from "zustand";
+import { create, useStore } from "zustand";
 import { temporal } from "zundo";
-import { useStoreWithEqualityFn } from "zustand/traditional";
+import { useShallow } from "zustand/shallow";
 import type { TemporalState } from "zundo";
 import * as z from "zod";
 
@@ -480,12 +480,10 @@ export default function DesignStudio() {
     resetTemplate,
   } = useDesignStore();
 
-  const { undo, redo, pastStates, futureStates } = useTemporalStore((s) => ({
-    undo: s.undo,
-    redo: s.redo,
-    pastStates: s.pastStates,
-    futureStates: s.futureStates,
-  }));
+/** Reactive hook for temporal (undo/redo) state. */
+function useTemporalStore<T>(selector: (state: TemporalState<StoreState>) => T): T {
+  return useStore(useDesignStore.temporal, useShallow(selector));
+}
 
   const template = TEMPLATES.find((t) => t.id === templateId)!;
   const { ref: stageRef, scale } = useStageScale(template.width);

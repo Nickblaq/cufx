@@ -49,6 +49,26 @@ export default function Home() {
             </span>
           </span>
         </Link>
+
+        <Link href="/edit" className="card">
+          <span className="swatch swatchAlt" />
+          <span className="cardBody">
+            <span className="cardTitle">Edit</span>
+            <span className="cardDesc">
+              Live edit for Pull video, audio, or a full playlist from any link.
+            </span>
+          </span>
+        </Link>
+
+        <Link href="/op" className="card">
+          <span className="swatch swatchAlt" />
+          <span className="cardBody">
+            <span className="cardTitle">Op</span>
+            <span className="cardDesc">
+              Ffmpeg video, audio, and other operations.
+            </span>
+          </span>
+        </Link>
       </div>
 
       <footer className="footer">

@@ -1,24 +1,15 @@
-// app/api/design/export/route.ts (sketch)
-import { Resvg } from "@resvg/resvg-js";
-import { PDFDocument } from "pdf-lib";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
+import { NextRequest, NextResponse } from "next/server";
+import { readJobStatus } from "@/lib/jobs";
 
-const fontPath = path.join(process.cwd(), "public/fonts/SpaceGrotesk-Regular.ttf");
-const fontBuffer = await readFile(fontPath);
+export async function GET(req: NextRequest) {
+  const jobId = req.nextUrl.searchParams.get("jobId");
+  if (!jobId) {
+    return NextResponse.json({ error: "Missing jobId" }, { status: 400 });
+  }
 
-const resvg = new Resvg(svgString, {
-  font: {
-    fontBuffers: [fontBuffer],
-    loadSystemFonts: false,
-    defaultFontFamily: "Space Grotesk",
-  },
-  fitTo: { mode: "width", value: 2480 }, // A4 @ 300 DPI
-});
-const png = resvg.render().asPng();
-
-const pdf = await PDFDocument.create();
-const img = await pdf.embedPng(png);
-const page = pdf.addPage([img.width * 0.24, img.height * 0.24]); // pt = px * 0.75 / 3.125
-page.drawImage(img, { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() });
-const bytes = await pdf.save();
+  const status = await readJobStatus(jobId);
+  if (!status) {
+    return NextResponse.json({ status: "starting", progress: 0 });
+  }
+  return NextResponse.json(status);
+}

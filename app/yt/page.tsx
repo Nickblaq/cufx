@@ -531,7 +531,7 @@ const OPERATIONS: Operation[] = [
       { key: "url", type: "string", label: "Video URL" },
       { key: "chapters", type: "boolean", label: "Include chapters", default: true },
       { key: "infoJson", type: "boolean", label: "Attach: infojson to MKV", default: false },
- "192K    ],
+ "192K"    ],
   },
 
   /* ===== Tier 5: Preset Pipelines ===== */

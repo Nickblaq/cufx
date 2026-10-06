@@ -131,7 +131,7 @@ const useDesignStore = create<StoreState>()(
     (set, get) => ({
       templateId: "id",
       elements: ID_CARD.elements.map((e) elements: => ({ ...e })),
-      s selectedId: null,
+      selectedId: null,
 
       set.eTemplate: (id) => {
         constlements.filter t = TEMPLATES.find((x) => x.id === id);

@@ -1,6 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
+
+const grotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  weight: ["400", "500", "600", "700"],
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  weight: ["400", "500", "600"],
+});
 
 /* ---------------------------------- icons --------------------------------- */
 /* Hand-drawn, single stroke weight, no icon library dependency. */
@@ -107,6 +120,20 @@ function IconChevronDown({ size = 16 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" {...stroke}>
       <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+function IconDownload({ size = 16 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...stroke}>
+      <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+    </svg>
+  );
+}
+function IconUpload({ size = 22 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...stroke}>
+      <path d="M12 21V9M7 14l5-5 5 5M5 3h14" />
     </svg>
   );
 }
@@ -366,6 +393,15 @@ export default function EditorPage() {
     setExporting(true);
     setExportError(null);
     try {
+      // textSize is a CSS px value sized for the on-screen preview box,
+      // whose rendered width varies with viewport — but the exported image
+      // can be thousands of pixels wide. Scale it by (export width ÷
+      // displayed preview width) so the caption comes out the same
+      // proportional size the user actually saw, not a tiny/huge mismatch.
+      const displayedWidth = previewBoxRef.current?.getBoundingClientRect().width || naturalSize.width;
+      const exportWidth = cropRect.width * naturalSize.width;
+      const textScale = displayedWidth ? exportWidth / displayedWidth : 1;
+
       const ops = {
         crop: cropRect,
         brightnessPct: photoAdjust.brightnessPct,
@@ -376,7 +412,7 @@ export default function EditorPage() {
         format: pFormat,
         quality,
         text: textContent.trim()
-          ? { content: textContent.trim(), size: textSize, align: textAlign, color: "#ffffff" }
+          ? { content: textContent.trim(), size: Math.round(textSize * textScale), align: textAlign, color: "#ffffff" }
           : null,
       };
       const form = new FormData();
@@ -424,18 +460,41 @@ export default function EditorPage() {
         </button>
         <div className="title">
           <span className="titleMain">Untitled edit</span>
-          <span className="titleSub">{mode === "video" ? "video · 1080×1350" : "photo · 2400×3000"}</span>
+          <span className="titleSub">
+            {mode === "video"
+              ? "video · 1080×1350"
+              : naturalSize.width
+              ? `photo · ${naturalSize.width}×${naturalSize.height}`
+              : "photo · no file loaded"}
+          </span>
         </div>
-        <button className="exportbtn">Export</button>
+        <button
+          className="exportbtn"
+          onClick={mode === "photo" ? handleExport : undefined}
+          disabled={mode === "photo" && (!photoUrl || exporting)}
+        >
+          {mode === "photo" && exporting ? "Exporting…" : "Export"}
+        </button>
       </header>
 
       <div className="metastrip">
         {mode === "video" ? (
           <span>≈ {estVideoMB.toFixed(1)} MB &nbsp;|&nbsp; {codec} &nbsp;|&nbsp; {fmtTime(clipDuration)}</span>
+        ) : exportedUrl && exportedBytes ? (
+          <span>
+            {(exportedBytes / 1024).toFixed(0)} KB (actual) &nbsp;|&nbsp; {pFormat.toUpperCase()} &nbsp;|&nbsp; q{quality}
+          </span>
         ) : (
           <span>≈ {estPhotoKB} KB &nbsp;|&nbsp; {pFormat.toUpperCase()} &nbsp;|&nbsp; q{quality}</span>
         )}
       </div>
+
+      {mode === "photo" && exportError && <div className="exportError">{exportError}</div>}
+      {mode === "photo" && exportedUrl && !exportError && (
+        <a className="exportDone" href={exportedUrl} download={`edit.${pFormat}`}>
+          <IconDownload /> Download exported photo
+        </a>
+      )}
 
       {/* mode switch */}
       <div className="segwrap">
@@ -457,15 +516,51 @@ export default function EditorPage() {
       {/* preview */}
       <div className="previewWrap">
         <div
+          ref={mode === "photo" ? previewBoxRef : undefined}
           className="preview"
           style={{
-            aspectRatio: mode === "photo" ? ASPECTS.find((a) => a.id === aspect)!.ratio : "9 / 16",
-            filter: previewFilter,
+            aspectRatio:
+              mode === "photo"
+                ? naturalSize.width
+                  ? `${naturalSize.width} / ${naturalSize.height}` // full image, 1:1 with canvas pixels so the crop overlay lines up exactly
+                  : ASPECTS.find((a) => a.id === aspect)!.ratio // no photo yet — fall back to a sensible placeholder shape
+                : "9 / 16",
+            filter: mode === "photo" && !photoUrl ? undefined : previewFilter,
           }}
         >
-          <div className="previewArt" />
-          {mode === "photo" && tool === "crop" && (
-            <div className="cropGuides" aria-hidden>
+          {mode === "video" && <div className="previewArt" />}
+
+          {mode === "photo" && !photoUrl && (
+            <label className="uploadPrompt">
+              <IconUpload />
+              <span>Upload a photo to start editing</span>
+              <input type="file" accept="image/*" onChange={handleFileChange} hidden />
+            </label>
+          )}
+
+          {mode === "photo" && photoUrl && (
+            <>
+              <canvas ref={canvasRef} className="photoCanvas" />
+              <label className="replaceBtn">
+                Replace
+                <input type="file" accept="image/*" onChange={handleFileChange} hidden />
+              </label>
+            </>
+          )}
+
+          {mode === "photo" && photoUrl && tool === "crop" && (
+            <div
+              className="cropGuides"
+              style={{
+                left: `${cropRect.x * 100}%`,
+                top: `${cropRect.y * 100}%`,
+                width: `${cropRect.width * 100}%`,
+                height: `${cropRect.height * 100}%`,
+              }}
+              onPointerDown={cropPointerDown}
+              onPointerMove={cropPointerMove}
+              onPointerUp={cropPointerUp}
+            >
               <span className="corner tl" />
               <span className="corner tr" />
               <span className="corner bl" />
@@ -476,12 +571,12 @@ export default function EditorPage() {
               <span className="gridline gh2" />
             </div>
           )}
-          {mode === "photo" && tool === "text" && (
+          {mode === "photo" && photoUrl && textContent.trim() && (
             <div
               className="previewText"
               style={{ fontSize: textSize, textAlign }}
             >
-              Your caption
+              {textContent}
             </div>
           )}
         </div>
@@ -688,6 +783,14 @@ export default function EditorPage() {
 
               {tool === "text" && (
                 <>
+                  <input
+                    className="textInput"
+                    type="text"
+                    maxLength={200}
+                    placeholder="Add a caption…"
+                    value={textContent}
+                    onChange={(e) => setTextContent(e.target.value)}
+                  />
                   <Row label="Size" value={`${textSize}px`}>
                     <input type="range" min={16} max={72} value={textSize} onChange={(e) => setTextSize(+e.target.value)} />
                   </Row>
@@ -777,6 +880,40 @@ export default function EditorPage() {
           font-size: 12px;
           color: var(--render);
         }
+        .exportError {
+          margin: 0 16px 12px;
+          font-size: 12.5px;
+          color: #b3261e;
+          background: #fdecea;
+          border: 1px solid #f6c6c1;
+          border-radius: 10px;
+          padding: 8px 12px;
+        }
+        .exportDone {
+          margin: 0 16px 12px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--render);
+          background: #e8f8f1;
+          border: 1px solid #c7eedc;
+          border-radius: 10px;
+          padding: 9px 12px;
+          text-decoration: none;
+          width: fit-content;
+        }
+        .textInput {
+          width: 100%;
+          padding: 10px 12px;
+          border-radius: 10px;
+          border: 1px solid var(--border);
+          background: var(--bg);
+          font-size: 14px;
+          font-family: var(--font-sans), sans-serif;
+          color: var(--ink);
+        }
 
         .segwrap {
           padding: 0 16px 14px;
@@ -827,10 +964,49 @@ export default function EditorPage() {
           background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.25), transparent 55%),
             radial-gradient(circle at 75% 85%, rgba(0, 0, 0, 0.35), transparent 60%);
         }
+        .photoCanvas {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          background: #000;
+        }
+        .uploadPrompt {
+          position: absolute;
+          inset: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          color: var(--ink-soft);
+          background: var(--surface);
+          cursor: pointer;
+          font-size: 13.5px;
+          font-weight: 500;
+        }
+        .replaceBtn {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          background: rgba(20, 23, 26, 0.55);
+          color: #fff;
+          font-size: 12px;
+          font-weight: 600;
+          padding: 6px 12px;
+          border-radius: 999px;
+          cursor: pointer;
+          backdrop-filter: blur(4px);
+        }
         .cropGuides {
           position: absolute;
-          inset: 8%;
-          pointer-events: none;
+          pointer-events: auto;
+          cursor: grab;
+          touch-action: none;
+        }
+        .cropGuides:active {
+          cursor: grabbing;
         }
         .corner {
           position: absolute;

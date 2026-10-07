@@ -302,7 +302,7 @@ export default function ExtractPage() {
   const selectedCount = isPlaylist ? selected.size : 1;
 
   return (
-    <div className={`${grotesk.variable} ${plexMono.variable} root`}>
+    <div className={`${grotesk.variable} ${plexMono.variable} `}>
       <header className="topbar">
         <a className="iconbtn" href="/" aria-label="Back">
           <svg width={20} height={20} viewBox="0 0 24 24" {...stroke}><path d="M15 5 8 12l7 7" /></svg>

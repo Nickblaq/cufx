@@ -3102,4 +3102,19 @@ textarea{resize:vertical;font-family:var(--font-mono);font-size:12.5px}
 .navActive{color:var(--accent)}
 .navIcon{position:relative;display:flex}
 .navBadge{position:absolute;top:-4px;right:-8px;min-width:16px;height:16px;padding:0 4px;background:var(--accent);color:#fff;border-radius:8px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono)}
-.navLabel{font-size:10.5px
+.navLabel{font-size:10.5px;font-weight:500}
+
+@media (min-width:720px){
+  .app{max-width:720px;margin:0 auto;border-left:1px solid var(--border);border-right:1px solid var(--border)}
+}
+`;
+
+if (
+  typeof document !== "undefined" &&
+  !document.getElementById("ffmpeg-page-styles")
+) {
+  const el = document.createElement("style");
+  el.id = "ffmpeg-page-styles";
+  el.textContent = STYLES;
+  document.head.appendChild(el);
+}

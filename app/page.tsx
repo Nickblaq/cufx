@@ -69,6 +69,27 @@ export default function Home() {
             </span>
           </span>
         </Link>
+
+        <Link href="/yt" className="card">
+          <span className="swatch swatchAlt" />
+          <span className="cardBody">
+            <span className="cardTitle">YT</span>
+            <span className="cardDesc">
+              Extract and download video, audio, and others from numerous sites e.g Twitter-( X ), PornHub, Youtbube ( Video, Audio, Subtitle, Thumbnails e.t.c. ) in different resolutions, formats, exts,bitrate and more by inserting the media link.
+            </span>
+          </span>
+        </Link>
+
+         <Link href="/design" className="card">
+          <span className="swatch swatchAlt" />
+          <span className="cardBody">
+            <span className="cardTitle">Design</span>
+            <span className="cardDesc">
+              Design ID cards & Receipts using advanced feeatures.
+            </span>
+          </span>
+        </Link>
+        
       </div>
 
       <footer className="footer">

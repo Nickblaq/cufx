@@ -593,7 +593,7 @@ export default function DesignStudio() {
   };
 
   return (
-    <div className="root" onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
+    <div onPointerMove={onPointerMove} onPointerUp={onPointerUp}>
       <header className="topbar">
         <button className="iconbtn" aria-label="Back">
           <IconBack />

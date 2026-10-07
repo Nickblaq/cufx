@@ -549,7 +549,7 @@ export default function EditorPage() {
   if (lut !== "none") pipeline.push(`Filter · ${activeLut.label}`);
 
   return (
-    <div className="root">
+    <div className="">
       {/* top bar */}
       <header className="topbar">
         <button className="iconbtn" aria-label="Back">

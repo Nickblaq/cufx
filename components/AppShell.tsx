@@ -50,7 +50,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         .topbar {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 6px;
           padding: 20px 0 8px;
           flex-wrap: nowrap;
         }
@@ -68,7 +68,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         .nav {
           display: flex;
-          gap: 2px;
+          gap: 8px;
           margin-left: auto;
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;

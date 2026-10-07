@@ -1466,7 +1466,7 @@ const API = {
       const fd = new FormData();
       fd.append("file", file);
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/api/ffmpeg/upload");
+      xhr.open("POST", "/api/ff/upload");
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable && onProgress) {
           onProgress(Math.round((e.loaded / e.total) * 100));
@@ -1493,7 +1493,7 @@ const API = {
     inputs: { id: string; role: string }[],
     operations: OperationPayload[]
   ): Promise<string> {
-    const res = await fetch("/api/ffmpeg/run", {
+    const res = await fetch("/api/ff/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ inputs, operations }),
@@ -1506,7 +1506,7 @@ const API = {
   },
 
   async job(jobId: string): Promise<JobProgress> {
-    const res = await fetch(`/api/ffmpeg/job/${jobId}`);
+    const res = await fetch(`/api/ff/job/${jobId}`);
     const data = await res.json();
     if (!res.ok || !data.ok) {
       throw new Error(data.error || "Failed to fetch job");
@@ -2430,7 +2430,47 @@ function ResultView({
   onHome: () => void;
 }) {
   const ok = job?.status === "completed";
-  const primary = job?.outputs?.[0];
+  const outputs = job?.outputs ?? [];
+  const primary = outputs[0];
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  async function downloadAndSave() {
+    if (!job?.jobId || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch(
+        `/api/ff/download?jobId=${encodeURIComponent(job.jobId)}`
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Download failed (${res.status})`);
+      }
+      const blob = await res.blob();
+
+      // Prefer the UTF-8 filename from Content-Disposition if present.
+      const cd = res.headers.get("Content-Disposition") || "";
+      const utf8 = cd.match(/filename\*=UTF-8''([^;]+)/i);
+      const ascii = cd.match(/filename="([^"]+)"/i);
+      const name = utf8
+        ? decodeURIComponent(utf8[1])
+        : ascii?.[1] ?? primary?.name ?? "download";
+
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(href);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="pad">
@@ -2456,24 +2496,58 @@ function ResultView({
         </section>
       )}
 
-      {job?.outputs && job.outputs.length > 0 && (
+      {saveError && (
+        <div className="errorBox">
+          <Icons.Warn /> {saveError}
+        </div>
+      )}
+
+      {ok && (
+        <button
+          type="button"
+          className="primaryBtn"
+          onClick={downloadAndSave}
+          disabled={saving}
+        >
+          <Icons.Download size={18} />
+          {saving ? "Preparing…" : "Save to device"}
+        </button>
+      )}
+
+      {outputs.length > 1 && (
         <section>
           <div className="rowHead">
             <h3 className="sectionTitle">All outputs</h3>
+            <span className="rowAction">{outputs.length} files</span>
           </div>
           <ul className="outputList">
-            {job.outputs.map((o) => (
+            {outputs.map((o) => (
               <li key={o.name}>
-                <a className="outputRow" href={o.url} download>
+                <button
+                  type="button"
+                  className="outputRow"
+                  onClick={downloadAndSave}
+                  style={{
+                    width: "100%",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    font: "inherit",
+                    color: "inherit",
+                  }}
+                >
                   <Icons.Download size={16} />
                   <span className="outputName">{o.name}</span>
                   <span className="outputSize">
                     {formatBytes(o.sizeBytes)}
                   </span>
-                </a>
+                </button>
               </li>
             ))}
           </ul>
+          <p className="fieldHelp" style={{ paddingTop: 6 }}>
+            Primary output is served by the button above. Additional files are
+            listed for reference.
+          </p>
         </section>
       )}
 
@@ -2632,7 +2706,7 @@ export default function FfmpegPage() {
     try {
       const uploaded = await API.upload(file, (p) => setUploadPercent(p));
       setAsset(uploaded);
-      setPipeline([]); // new source, drop stale steps
+      setPipeline([]);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -2719,7 +2793,6 @@ export default function FfmpegPage() {
 
   /* ── Render ────────────────────────────────────────────────────────── */
   const headerPrimaryAction = useCallback(() => {
-    // Only navigate; never destroy state via the header button.
     if (view !== "home") setView("home");
   }, [view]);
 
@@ -3053,7 +3126,7 @@ const STYLES = `
 .videoName{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .videoInfo{font-size:12px;color:var(--ink-soft);font-family:var(--font-mono)}
 .outputList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-.outputRow{display:flex;align-items:center;gap:10px;padding:12px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);text-decoration:none;color:var(--ink)}
+.outputRow{display:flex;align-items:center;gap:10px;padding:12px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);text-decoration:none;color:var(--ink);font-family:inherit}
 .outputRow:hover{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .outputName{flex:1;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .outputSize{font-size:11.5px;color:var(--ink-mute);font-family:var(--font-mono)}

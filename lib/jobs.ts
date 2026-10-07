@@ -102,6 +102,39 @@ export function startPythonDownload(jobId: string, optionsJson: string) {
   return child;
 }
 
+/**
+ * Same contract as startPythonDownload but invokes python/ffmpeg.py.
+ * Kept as a separate function so the ffmpeg and ytdlp scripts can evolve
+ * independently without callers having to know about subcommands.
+ */
+export function startPythonFfmpeg(jobId: string, optionsJson: string) {
+  const { statusFile, outputDir } = jobDirs(jobId);
+  const scriptPath = path.join(process.cwd(), "python", "ffmpeg.py");
+
+  const child = spawn(
+    "python3",
+    [scriptPath, statusFile, outputDir, optionsJson],
+    {
+      stdio: ["ignore", "ignore", "pipe"],
+      env: pythonEnv(),
+    }
+  );
+
+  let stderr = "";
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+    if (stderr.length > 8000) stderr = stderr.slice(-8000);
+  });
+  child.on("exit", (code) => {
+    if (code !== 0 && stderr) {
+      // eslint-disable-next-line no-console
+      console.error(`[ffmpeg job ${jobId}] exited ${code}:\n${stderr}`);
+    }
+  });
+
+  return child;
+}
+
 export type JobStatus = {
   status: string;
   progress: number;
@@ -111,6 +144,10 @@ export type JobStatus = {
   eta?: number | null;
   error?: string | null;
   filename?: string | null;
+  log?: string;
+  stepIndex?: number;
+  totalSteps?: number;
+  outputs?: { name: string; sizeBytes?: number }[];
 };
 
 export async function readJobStatus(jobId: string): Promise<JobStatus | null> {

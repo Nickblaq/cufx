@@ -1,4 +1,4 @@
-// app/op/page.tsx
+// app/yt/page.tsx
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1033,7 +1033,7 @@ function Empty({ title, hint }: { title: string; hint?: string }) {
    MAIN PAGE
    ══════════════════════════════════════════════════════════════════════════ */
 
-export default function OpPage() {
+export default function YtPage() {
   const [view, setView] = useState<View>("home");
   const [sheet, setSheet] = useState<SheetKind>(null);
 

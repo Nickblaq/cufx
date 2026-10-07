@@ -16,10 +16,8 @@ const plexMono = IBM_Plex_Mono({
 
 export default function Home() {
   return (
-    <div className={`${grotesk.variable} ${plexMono.variable} root`}>
-      <header className="topbar">
-        <span className="wordmark">cufx</span>
-      </header>
+    <div >
+     // className={`${grotesk.variable} ${plexMono.variable} root`}
 
       <main className="hero">
         <h1>One link in. Every format out.</h1>
@@ -92,9 +90,6 @@ export default function Home() {
         
       </div>
 
-      <footer className="footer">
-        <span>Next.js · ffmpeg · sharp · yt-dlp</span>
-      </footer>
 
       <style jsx>{`
         .root {

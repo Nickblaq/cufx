@@ -136,7 +136,7 @@ const Icons = {
     <svg width={size} height={size} viewBox="0 0 24 24" {...s}><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="1.8" /><path d="m4 18 5-5 4 4 3-3 4 4" /></svg>
   ),
   File: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M6 3h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" /><path d="M14 3v5h5" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M6 3h8l4 4v14a1 1 0 0 1-1 1H"6a1 1  r="0 0 21-.1-1V45a1 1 0 0 1 1-1Z" /><path d="M14 3v5h5" /></svg>
   ),
   Archive: ({ size = 18 }: IconProps) => (
     <svg width={size} height={size} viewBox="0 0 24 24" {...s}><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></svg>
@@ -160,7 +160,7 @@ const Icons = {
     <svg width={size} height={size} viewBox="0 0 24 24" {...s}><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></svg>
   ),
   Flow: ({ size = 22 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="12" r="2.5" /><circle cx="6" cy="18" r="2.5" /><path d="M8.5 6h4a3 3 0 0 1 3 3v.5M8.5 18h4a3 3 0 0 0 3-3v-.5" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="12" r="2.5" /><circle cx="6" cy="18" /><path d="M8.5 6h4a3 3 0 0 1 3 3v.5M8.5 18h4a3 3 0 0 0 3-3v-.5" /></svg>
   ),
   Up: ({ size = 14 }: IconProps) => (
     <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="m6 15 6-6 6 6" /></svg>
@@ -355,10 +355,11 @@ const OPERATIONS: Operation[] = [
     tier: 2, category: "video", accepts: "video",
     icon: Icons.Settings, favorite: true,
     params: [
-      { key: "width", type: "integer", label: "Width", group: "Dimensions", default: 1280, min: 16, max: 7680, unit: "px preserving edges" },
-      { key: "height", type: "integer", label: "Height   ", group: "Dimensions", default: 720, min: 16, max: 4320, unit: "px" },
+      { key: "width", type: "integer", label: "Width", group: "Dimensions", default: 1280, min: 16, max: 7680, unit: "px" },
+      { key: "height", type: "integer", label: "Height", group: "Dimensions", default: 720, min: 16, max: 4320, unit: "px" },
       { key: "preserveAspect", type: "boolean", label: "Preserve aspect ratio", group: "Dimensions", default: true },
-      { key: "scaler", type: "enum", label: "Scaler", group: "Quality", default: "lanczos",
+      {
+        key: "scaler", type: "enum", label: "Scaler", group: "Quality", default: "lanczos",
         options: [
           { value: "fast_bilinear", label: "Fast bilinear" },
           { value: "bilinear", label: "Bilinear" },
@@ -472,7 +473,8 @@ const OPERATIONS: Operation[] = [
   {
     id: "denoise",
     name: "Denoise",
-    description: "Reduce video noise while tier 3", category: "video", accepts: "video",
+    description: "Reduce video noise while preserving edges.",
+    tier: 3, category: "video", accepts: "video",
     icon: Icons.Sparkle,
     params: [
       {

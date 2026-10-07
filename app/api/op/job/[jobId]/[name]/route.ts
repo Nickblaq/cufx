@@ -32,7 +32,7 @@ export async function GET(
   { params }: { params: Promise<{ jobId: string; name: string }> }
 ) {
   const { jobId, name } = await params;
-  const decoded = decodeURIComponent(name);
+  const decoded = name;  
 
   // Guard against path traversal — the resolved path must stay inside the
   // job's output directory.

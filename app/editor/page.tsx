@@ -274,7 +274,7 @@ export default function EditorPage() {
   if (lut !== "none") pipeline.push(`Filter · ${activeLut.label}`);
 
   return (
-    <div className={`${grotesk.variable} ${plexMono.variable} root`}>
+    <div className={`${grotesk.variable} ${plexMono.variable} `}>
       {/* top bar */}
       <header className="topbar">
         <button className="iconbtn" aria-label="Back">

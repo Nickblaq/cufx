@@ -125,7 +125,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const raw = await runPythonJSON<RawInfo>("ytdlp_resolve.py", [parsed.data.url]);
+    
+const raw = await runPythonJSON<RawInfo>("ytdlp.py", ["resolve", parsed.data.url]);
 
     if (raw.error) {
       return NextResponse.json({ ok: false, error: raw.error }, { status: 502 });

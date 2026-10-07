@@ -1,6 +1,8 @@
 import { Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
+import AppShell from "@/components/AppShell";
+
 const grotesk = Space_Grotesk({
   subsets: ["latin"],
   variable: "--font-sans",
@@ -17,7 +19,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body 
-        className={`${grotesk.variable} ${plexMono.variable} antialiased`}>{children}</body>
+        className={`${grotesk.variable} ${plexMono.variable} antialiased`}>
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }

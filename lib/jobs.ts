@@ -76,12 +76,16 @@ export async function runPythonJSON<T = unknown>(
  */
 export function startPythonDownload(jobId: string, optionsJson: string) {
   const { statusFile, outputDir } = jobDirs(jobId);
-  const scriptPath = path.join(process.cwd(), "python", "ytdlp_download.py");
+  const scriptPath = path.join(process.cwd(), "python", "ytdlp.py");
 
-  const child = spawn("python3", [scriptPath, statusFile, outputDir, optionsJson], {
-    stdio: ["ignore", "ignore", "pipe"],
-    env: pythonEnv(),
-  });
+  const child = spawn(
+    "python3",
+    [scriptPath, "download", statusFile, outputDir, optionsJson],
+    {
+      stdio: ["ignore", "ignore", "pipe"],
+      env: pythonEnv(),
+    }
+  );
 
   let stderr = "";
   child.stderr.on("data", (chunk) => {

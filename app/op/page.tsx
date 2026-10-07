@@ -1256,42 +1256,96 @@ function RunView({
 
 /* ============================== RESULT VIEW ============================== */
 function ResultView({
-  source, pipeline, onAgain, onHome, onSave,
+  info, job, onAgain, onHome,
 }: {
-  source: Source | null;
-  pipeline: { id: string; op: Operation }[];
+  info: MediaInfo | null;
+  job: JobProgress | null;
   onAgain: () => void;
   onHome: () => void;
-  onSave: () => void;
 }) {
+  const ok = job?.status === "completed";
+  const outputs = job?.outputs ?? [];
+  const primary = outputs[0];
+
+  async function downloadAndSave(url: string, fallbackName: string) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Download failed (${res.status})`);
+      const blob = await res.blob();
+      // Try to read filename from Content-Disposition, fall back to the
+      // output's own name.
+      const cd = res.headers.get("Content-Disposition") || "";
+      const m = cd.match(/filename="?([^"]+)"?/);
+      const name = m?.[1] ?? fallbackName;
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(href);
+    } catch (err) {
+      console.error("[download]", err);
+    }
+  }
+
   return (
     <div className="pad">
       <section className="card resultHero">
-        <div className="resultIcon"><I.Check size={28} /></div>
-        <h2 className="resultTitle">Pipeline complete</h2>
-        <p className="resultSub">{pipeline.map((s) => s.op.name).join(" → ")}</p>
+        <div className={"resultIcon " + (ok ? "" : "resultIconFail")}>
+          {ok ? <Icons.Check size={28} /> : <Icons.Warn size={28} />}
+        </div>
+        <h2 className="resultTitle">{ok ? "Download complete" : "Download failed"}</h2>
+        <p className="resultSub">{job?.error || info?.title || ""}</p>
       </section>
 
-      <section className="card videoPreview">
-        <div className="videoThumb">
-          <I.Play size={32} />
-        </div>
-        <div className="videoMeta">
-          <span className="videoName">{source?.name.replace(/\.[^.]+$/, "_out.mp4")}</span>
-          <span className="videoInfo">1920×1080 · H.264 · 184 MB · 42s</span>
-        </div>
-      </section>
+      {primary && (
+        <section className="card videoPreview">
+          <div className="videoThumb"><Icons.Play size={28} /></div>
+          <div className="videoMeta">
+            <span className="videoName">{primary.name}</span>
+            <span className="videoInfo">{formatBytes(primary.sizeBytes)}</span>
+          </div>
+        </section>
+      )}
 
-      <section className="card statsCard">
-        <Stat label="Duration" value="42s" />
-        <Stat label="Size" value="184 MB" />
-        <Stat label="Bitrate" value="3.4 Mb/s" />
-      </section>
+      {primary && (
+        <button
+          className="primaryBtn"
+          onClick={() => downloadAndSave(primary.url, primary.name)}
+        >
+          <Icons.Download size={18} /> Save to device
+        </button>
+      )}
+
+      {outputs.length > 1 && (
+        <section>
+          <div className="rowHead">
+            <h3 className="sectionTitle">All outputs</h3>
+            <span className="rowAction">{outputs.length} files</span>
+          </div>
+          <ul className="outputList">
+            {outputs.map((o) => (
+              <li key={o.name}>
+                <button
+                  className="outputRow"
+                  onClick={() => downloadAndSave(o.url, o.name)}
+                  style={{ width: "100%", border: "1px solid var(--border)", cursor: "pointer", textAlign: "left" }}
+                >
+                  <Icons.Download size={16} />
+                  <span className="outputName">{o.name}</span>
+                  <span className="outputSize">{formatBytes(o.sizeBytes)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="resultActions">
-        <button className="primaryBtn" onClick={onSave}><I.Download size={16} /> Save to Library</button>
-        <button className="ghostBtnWide" onClick={onAgain}><I.Bolt size={14} /> Run Again</button>
-        <button className="ghostBtnWide" onClick={onHome}>Back to Home</button>
+        <button className="primaryBtn" onClick={onHome}>Back to Home</button>
+        <button className="ghostBtnWide" onClick={onAgain}>Start Another</button>
       </div>
     </div>
   );

@@ -40,7 +40,7 @@ async function listOutputs(jobId: string) {
     if (!st || !st.isFile()) continue;
     out.push({
       name,
-      url: `/api/op/file/${jobId}/${encodeURIComponent(name)}`,
+      url: `/api/op/download?job=${encodeURIComponent(jobId)}&name=${encodeURIComponent(name)}`
       sizeBytes: st.size,
     });
   }

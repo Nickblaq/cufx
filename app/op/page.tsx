@@ -356,11 +356,9 @@ const OPERATIONS: Operation[] = [
     icon: Icons.Settings, favorite: true,
     params: [
       { key: "width", type: "integer", label: "Width", group: "Dimensions", default: 1280, min: 16, max: 7680, unit: "px preserving edges" },
-      { key: ".",
-height", type: "integer", label: "Height   ", group: "Dimensions", default: 720, min: 16, max: 4320, unit: "px" },
+      { key: "height", type: "integer", label: "Height   ", group: "Dimensions", default: 720, min: 16, max: 4320, unit: "px" },
       { key: "preserveAspect", type: "boolean", label: "Preserve aspect ratio", group: "Dimensions", default: true },
-      {
-        key: "scaler", type: "enum", label: "Scaler", group: "Quality", default: "lanczos",
+      { key: "scaler", type: "enum", label: "Scaler", group: "Quality", default: "lanczos",
         options: [
           { value: "fast_bilinear", label: "Fast bilinear" },
           { value: "bilinear", label: "Bilinear" },

@@ -472,7 +472,7 @@ const OPERATIONS: Operation[] = [
   {
     id: "denoise",
     name: "Denoise",
-    description: "Reduce video noise while tier: 3, category: "video", accepts: "video",
+    description: "Reduce video noise while tier 3", category: "video", accepts: "video",
     icon: Icons.Sparkle,
     params: [
       {

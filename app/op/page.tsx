@@ -1,3 +1,4 @@
+
 // app/op/page.tsx
 "use client";
 
@@ -96,7 +97,7 @@ type JobProgress = {
   totalSteps?: number;
   log?: string;
   error?: string;
-  outputs?: { name: string; url: string; sizeBytes?: number }[];
+  outputs?: { name: string; sizeBytes?: number }[];
 };
 
 type View = "home" | "catalog" | "pipeline" | "run" | "result";
@@ -235,7 +236,6 @@ const TIER_FILTERS = [
 type TierFilter = (typeof TIER_FILTERS)[number]["id"];
 
 const OPERATIONS: Operation[] = [
-  /* ─── Tier 1 ─────────────────────────────────────────────────────────── */
   {
     id: "quick-best",
     name: "Quick Download (Best)",
@@ -302,8 +302,6 @@ const OPERATIONS: Operation[] = [
       },
     ],
   },
-
-  /* ─── Tier 2 ─────────────────────────────────────────────────────────── */
   {
     id: "resolution-cap",
     name: "Resolution Cap",
@@ -393,8 +391,6 @@ const OPERATIONS: Operation[] = [
       { key: "concurrent", type: "integer", label: "Concurrent Fragments", default: 4, min: 1, max: 32 },
     ],
   },
-
-  /* ─── Tier 3 ─────────────────────────────────────────────────────────── */
   {
     id: "output-template",
     name: "Output Template",
@@ -448,8 +444,6 @@ const OPERATIONS: Operation[] = [
       { key: "archiveFile", type: "string", label: "Archive File", default: "archive.txt" },
     ],
   },
-
-  /* ─── Tier 4 ─────────────────────────────────────────────────────────── */
   {
     id: "cookies-browser",
     name: "Cookies from Browser",
@@ -541,8 +535,6 @@ const OPERATIONS: Operation[] = [
       { key: "chapters", type: "boolean", label: "Include chapters", default: true },
     ],
   },
-
-  /* ─── Tier 5 ─────────────────────────────────────────────────────────── */
   {
     id: "music-pipeline",
     name: "Music Download Pipeline",
@@ -585,8 +577,6 @@ const OPERATIONS: Operation[] = [
       { key: "subLangs", type: "string", label: "Subtitle Languages", default: "en" },
     ],
   },
-
-  /* ─── Tier 6 ─────────────────────────────────────────────────────────── */
   {
     id: "sponsorblock-mark",
     name: "SponsorBlock Mark",
@@ -1052,7 +1042,6 @@ export default function OpPage() {
   const inspect = useAsync<MediaInfo>();
   const runJob = useAsync<string>();
 
-  /* ── Derived ─────────────────────────────────────────────────────────── */
   const visibleOps = useMemo(() => {
     const ranges: Record<TierFilter, [number, number]> = {
       all: [1, 6], basic: [1, 1], quality: [2, 2], files: [3, 3],
@@ -1082,7 +1071,6 @@ export default function OpPage() {
     [info]
   );
 
-  /* ── Actions ─────────────────────────────────────────────────────────── */
   async function handleInspect() {
     if (!url.trim()) return;
     const result = await inspect.run(() => API.inspect(url.trim()));
@@ -1141,18 +1129,13 @@ export default function OpPage() {
     setView("home");
   }
 
-  /* ── Auto-advance on completion ─────────────────────────────────────── */
   useEffect(() => {
     if (view === "run" && job?.status === "completed") {
       const t = setTimeout(() => setView("result"), 500);
       return () => clearTimeout(t);
     }
-    if (view === "run" && job?.status === "failed") {
-      // stay on run view but no auto-advance
-    }
   }, [view, job]);
 
-  /* ── Render ──────────────────────────────────────────────────────────── */
   return (
     <div className="app">
       <header className="topbar">
@@ -1699,15 +1682,29 @@ function ResultView({
   const ok = job?.status === "completed";
   const outputs = job?.outputs ?? [];
   const primary = outputs[0];
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  async function downloadAndSave(url: string, fallbackName: string) {
+  async function downloadAndSave() {
+    if (!job?.jobId || saving) return;
+    setSaving(true);
+    setSaveError(null);
     try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Download failed (${res.status})`);
+      const res = await fetch(
+        `/api/op/download?jobId=${encodeURIComponent(job.jobId)}`
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Download failed (${res.status})`);
+      }
       const blob = await res.blob();
+
+      // Prefer the UTF-8 filename from Content-Disposition if present.
       const cd = res.headers.get("Content-Disposition") || "";
-      const m = cd.match(/filename="?([^"]+)"?/);
-      const name = m?.[1] ?? fallbackName;
+      const utf8 = cd.match(/filename\*=UTF-8''([^;]+)/i);
+      const ascii = cd.match(/filename="([^"]+)"/i);
+      const name = utf8 ? decodeURIComponent(utf8[1]) : ascii?.[1] ?? "download";
+
       const href = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = href;
@@ -1717,7 +1714,9 @@ function ResultView({
       a.remove();
       URL.revokeObjectURL(href);
     } catch (err) {
-      console.error("[download]", err);
+      setSaveError(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -1741,12 +1740,18 @@ function ResultView({
         </section>
       )}
 
-      {primary && (
+      {saveError && (
+        <div className="errorBox"><Icons.Warn /> {saveError}</div>
+      )}
+
+      {ok && (
         <button
           className="primaryBtn"
-          onClick={() => downloadAndSave(primary.url, primary.name)}
+          onClick={downloadAndSave}
+          disabled={saving}
         >
-          <Icons.Download size={18} /> Save to device
+          <Icons.Download size={18} />
+          {saving ? "Preparing…" : "Save to device"}
         </button>
       )}
 
@@ -1759,18 +1764,17 @@ function ResultView({
           <ul className="outputList">
             {outputs.map((o) => (
               <li key={o.name}>
-                <button
-                  className="outputRow"
-                  onClick={() => downloadAndSave(o.url, o.name)}
-                  style={{ width: "100%", border: "1px solid var(--border)", cursor: "pointer", textAlign: "left" }}
-                >
-                  <Icons.Download size={16} />
+                <div className="outputRow">
+                  <Icons.Archive size={16} />
                   <span className="outputName">{o.name}</span>
                   <span className="outputSize">{formatBytes(o.sizeBytes)}</span>
-                </button>
+                </div>
               </li>
             ))}
           </ul>
+          <p className="fieldHelp" style={{ paddingTop: 6 }}>
+            All files are bundled in the single archive above.
+          </p>
         </section>
       )}
 
@@ -2050,8 +2054,7 @@ const STYLES = `
 .videoName{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .videoInfo{font-size:12px;color:var(--ink-soft);font-family:var(--font-mono)}
 .outputList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-.outputRow{display:flex;align-items:center;gap:10px;padding:12px;border-radius:var(--radius);background:var(--surface);text-decoration:none;color:var(--ink);font-family:inherit}
-.outputRow:hover{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.outputRow{display:flex;align-items:center;gap:10px;padding:12px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);color:var(--ink);font-family:inherit}
 .outputName{flex:1;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .outputSize{font-size:11.5px;color:var(--ink-mute);font-family:var(--font-mono)}
 .resultActions{display:flex;flex-direction:column;gap:8px}

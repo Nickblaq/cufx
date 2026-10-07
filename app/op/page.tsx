@@ -1,8 +1,8 @@
-// app/op/page.tsx
+// app/ffmpeg/page.tsx
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentType, ReactNode } from "react";
+import type { ChangeEvent, ComponentType, DragEvent, ReactNode } from "react";
 
 /* ══════════════════════════════════════════════════════════════════════════
    TYPES
@@ -54,35 +54,17 @@ type Operation = {
 };
 
 type FormValues = Record<string, unknown>;
-
 type OperationPayload = { id: string; params: FormValues };
 
-type MediaFormat = {
-  id: string;
-  label: string;
-  ext: string;
-  size: string;
-  note: string;
-};
+type AssetKind = "video" | "audio" | "image";
 
-type Subtitle = {
-  lang: string;
-  label: string;
-  auto: boolean;
-};
-
-type MediaInfo = {
-  url: string;
-  kind: "audio" | "video";
+type Asset = {
   id: string;
-  title: string;
-  uploader: string;
-  duration: string;
-  views: string;
-  uploadedAt: string;
-  thumbnail: string;
-  formats: MediaFormat[];
-  subtitles: Subtitle[];
+  name: string;
+  kind: AssetKind;
+  sizeBytes: number;
+  duration?: string;
+  meta?: string;
 };
 
 type JobStatus = "queued" | "running" | "completed" | "failed";
@@ -100,7 +82,7 @@ type JobProgress = {
 };
 
 type View = "home" | "catalog" | "pipeline" | "run" | "result";
-type SheetKind = null | "configure" | "info" | "formats" | "subs";
+type SheetKind = null | "configure" | "asset";
 
 type PipelineStep = { uid: string; op: Operation; values: FormValues };
 
@@ -138,8 +120,8 @@ const Icons = {
   Search: ({ size = 18 }: IconProps) => (
     <svg width={size} height={size} viewBox="0 0 24 24" {...s}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-3.5-3.5" /></svg>
   ),
-  Link: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5" /><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5" /></svg>
+  Upload: ({ size = 22 }: IconProps) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M12 19V8m0 0-4 4m4-4 4 4M5 5h14" /></svg>
   ),
   Download: ({ size = 18 }: IconProps) => (
     <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" /></svg>
@@ -150,23 +132,14 @@ const Icons = {
   Video: ({ size = 18 }: IconProps) => (
     <svg width={size} height={size} viewBox="0 0 24 24" {...s}><rect x="3" y="6" width="13" height="12" rx="2" /><path d="m16 10 5-3v10l-5-3" /></svg>
   ),
-  Subtitle: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M7 15h6M7 11h4M15 15h2" /></svg>
-  ),
   Image: ({ size = 18 }: IconProps) => (
     <svg width={size} height={size} viewBox="0 0 24 24" {...s}><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="1.8" /><path d="m4 18 5-5 4 4 3-3 4 4" /></svg>
   ),
+  File: ({ size = 18 }: IconProps) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M6 3h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" /><path d="M14 3v5h5" /></svg>
+  ),
   Archive: ({ size = 18 }: IconProps) => (
     <svg width={size} height={size} viewBox="0 0 24 24" {...s}><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></svg>
-  ),
-  Lock: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
-  ),
-  Globe: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></svg>
-  ),
-  Shield: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="m12 3 8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6Z" /></svg>
   ),
   Bolt: ({ size = 18 }: IconProps) => (
     <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M13 3 4 14h6l-1 7 9-11h-6l1-7Z" /></svg>
@@ -207,6 +180,18 @@ const Icons = {
   Settings: ({ size = 18 }: IconProps) => (
     <svg width={size} height={size} viewBox="0 0 24 24" {...s}><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" /></svg>
   ),
+  Sparkle: ({ size = 18 }: IconProps) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6" /></svg>
+  ),
+  Type: ({ size = 18 }: IconProps) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M4 6V4h16v2M9 20h6M12 4v16" /></svg>
+  ),
+  Crop: ({ size = 18 }: IconProps) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M6 2v16h16M2 6h16v16" /></svg>
+  ),
+  Rotate: ({ size = 18 }: IconProps) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M4 12a8 8 0 1 0 3-6.3" /><path d="M4 5v4h4" /></svg>
+  ),
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -214,212 +199,118 @@ const Icons = {
    ══════════════════════════════════════════════════════════════════════════ */
 
 const TIERS: Record<number, string> = {
-  1: "Basic Downloads",
-  2: "Quality & Selection",
-  3: "Files & Metadata",
-  4: "Auth & Subtitles",
-  5: "Preset Pipelines",
+  1: "Basic Operations",
+  2: "Intermediate",
+  3: "Advanced Video",
+  4: "Advanced Audio",
+  5: "Chained Presets",
   6: "Expert",
 };
 
 const TIER_FILTERS = [
   { id: "all", label: "All" },
   { id: "basic", label: "Basic" },
-  { id: "quality", label: "Quality" },
-  { id: "files", label: "Files" },
-  { id: "auth", label: "Auth" },
-  { id: "presets", label: "Presets" },
+  { id: "intermediate", label: "Inter." },
+  { id: "video", label: "Video" },
+  { id: "audio", label: "Audio" },
+  { id: "chains", label: "Chains" },
   { id: "expert", label: "Expert" },
 ] as const;
 
 type TierFilter = (typeof TIER_FILTERS)[number]["id"];
 
 const OPERATIONS: Operation[] = [
-  /* ─── Tier 1 ─────────────────────────────────────────────────────────── */
+  /* ─── Tier 1: Basic ──────────────────────────────────────────────────── */
   {
-    id: "quick-best",
-    name: "Quick Download (Best)",
-    description: "Best video and best audio merged automatically.",
-    tier: 1, category: "download", accepts: "video",
-    icon: Icons.Bolt, favorite: true,
-    params: [],
-  },
-  {
-    id: "audio-mp3",
-    name: "Audio Only (MP3)",
-    description: "Extract audio and convert to MP3.",
-    tier: 1, category: "audio", accepts: "both",
-    icon: Icons.Music, favorite: true,
+    id: "convert",
+    name: "Format Conversion",
+    description: "Convert any media file between container and codec formats.",
+    tier: 1, category: "container", accepts: "both",
+    icon: Icons.Archive, favorite: true,
     params: [
       {
-        key: "quality", type: "enum", label: "Quality", default: "0",
+        key: "format", type: "enum", label: "Container", default: "mp4",
         options: [
-          { value: "0", label: "Best (V0)" },
-          { value: "2", label: "High (V2)" },
-          { value: "5", label: "Medium (V5)" },
-          { value: "9", label: "Low (V9)" },
-          { value: "320K", label: "CBR 320k" },
-          { value: "192K", label: "CBR 192k" },
+          { value: "mp4", label: "MP4" },
+          { value: "mkv", label: "Matroska (MKV)" },
+          { value: "webm", label: "WebM" },
+          { value: "mov", label: "QuickTime (MOV)" },
+          { value: "avi", label: "AVI" },
         ],
       },
+      { key: "videoCodec", type: "string", label: "Video Codec", group: "Codecs", default: "libx264", placeholder: "libx264 / libvpx-vp9 / copy" },
+      { key: "audioCodec", type: "string", label: "Audio Codec", group: "Codecs", default: "aac", placeholder: "aac / libopus / copy" },
     ],
   },
   {
-    id: "audio-m4a",
-    name: "Audio Only (M4A)",
-    description: "Extract audio preserving AAC quality.",
-    tier: 1, category: "audio", accepts: "both",
-    icon: Icons.Music,
-    params: [],
-  },
-  {
-    id: "video-mp4",
-    name: "Video (MP4)",
-    description: "Download the best MP4 format available.",
-    tier: 1, category: "video", accepts: "video",
-    icon: Icons.Video,
-    params: [],
-  },
-  {
-    id: "video-webm",
-    name: "Video (WebM)",
-    description: "Download the best WebM format available.",
-    tier: 1, category: "video", accepts: "video",
-    icon: Icons.Video,
-    params: [],
-  },
-  {
-    id: "custom-format",
-    name: "Custom Format String",
-    description: "Pass a raw -f selector for full control.",
-    tier: 1, category: "download", accepts: "both",
-    icon: Icons.Terminal,
-    params: [
-      {
-        key: "format", type: "string", label: "Format Selector",
-        placeholder: "bv*[height<=1080]+ba/b",
-        helpText: "Raw yt-dlp -f value.",
-      },
-    ],
-  },
-
-  /* ─── Tier 2 ─────────────────────────────────────────────────────────── */
-  {
-    id: "resolution-cap",
-    name: "Resolution Cap",
-    description: "Best video up to a maximum height.",
-    tier: 2, category: "quality", accepts: "video",
-    icon: Icons.Video, favorite: true,
-    params: [
-      {
-        key: "maxHeight", type: "enum", label: "Max Height", default: "1080",
-        options: [
-          { value: "360", label: "360p" },
-          { value: "480", label: "480p" },
-          { value: "720", label: "720p" },
-          { value: "1080", label: "1080p" },
-          { value: "1440", label: "1440p" },
-          { value: "2160", label: "4K (2160p)" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "filesize-cap",
-    name: "Filesize Cap",
-    description: "Limit download to a maximum size.",
-    tier: 2, category: "quality", accepts: "both",
-    icon: Icons.Archive,
-    params: [
-      { key: "maxSize", type: "integer", label: "Max Size", default: 500, min: 10, max: 10000, unit: "MB" },
-    ],
-  },
-  {
-    id: "codec-pref",
-    name: "Codec Preference",
-    description: "Prefer specific video and audio codecs.",
-    tier: 2, category: "quality", accepts: "video",
-    icon: Icons.Settings,
-    params: [
-      {
-        key: "vcodec", type: "enum", label: "Video Codec", default: "any",
-        options: [
-          { value: "any", label: "Any" },
-          { value: "h264", label: "H.264 (max compatibility)" },
-          { value: "h265", label: "H.265 / HEVC" },
-          { value: "vp9", label: "VP9" },
-          { value: "av01", label: "AV1" },
-        ],
-      },
-      {
-        key: "acodec", type: "enum", label: "Audio Codec", default: "any",
-        options: [
-          { value: "any", label: "Any" },
-          { value: "opus", label: "Opus" },
-          { value: "aac", label: "AAC / M4A" },
-          { value: "mp3", label: "MP3" },
-          { value: "flac", label: "FLAC" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "section-download",
-    name: "Section Download",
-    description: "Download only a time range or chapter.",
-    tier: 2, category: "quality", accepts: "both",
+    id: "trim",
+    name: "Precise Trim",
+    description: "Cut a specific time range with frame accuracy.",
+    tier: 1, category: "video", accepts: "both",
     icon: Icons.Scissors, favorite: true,
     params: [
+      { key: "start", type: "string", label: "Start", group: "Range", default: "00:00:00", placeholder: "HH:MM:SS.ms", helpText: "Timecode or seconds." },
+      { key: "end", type: "string", label: "End", group: "Range", default: "", placeholder: "HH:MM:SS.ms" },
       {
-        key: "section", type: "string", label: "Section Expression",
-        placeholder: "*05:00-25:00",
-        helpText: "Time range with * prefix, or chapter title regex.",
-      },
-      {
-        key: "forceKeyframes", type: "boolean",
-        label: "Force keyframes at boundaries (slower, cleaner cuts)",
-        default: true,
+        key: "mode", type: "enum", label: "Mode", group: "Options", default: "reencode",
+        options: [
+          { value: "reencode", label: "Re-encode (frame accurate)" },
+          { value: "copy", label: "Stream copy (fast, keyframe only)" },
+        ],
       },
     ],
   },
   {
-    id: "rate-limit",
-    name: "Rate Limit",
-    description: "Cap download speed and fragment concurrency.",
-    tier: 2, category: "quality", accepts: "both",
-    icon: Icons.Globe,
-    params: [
-      { key: "rate", type: "string", label: "Max Rate", default: "1M", placeholder: "1M, 500K, 4.2M" },
-      { key: "concurrent", type: "integer", label: "Concurrent Fragments", default: 4, min: 1, max: 32 },
-    ],
-  },
-
-  /* ─── Tier 3 ─────────────────────────────────────────────────────────── */
-  {
-    id: "output-template",
-    name: "Output Template",
-    description: "Custom filename pattern using metadata fields.",
-    tier: 3, category: "files", accepts: "both",
-    icon: Icons.Archive,
+    id: "extract-audio",
+    name: "Extract Audio",
+    description: "Pull the audio track out as a standalone file.",
+    tier: 1, category: "audio", accepts: "both",
+    icon: Icons.Music,
     params: [
       {
-        key: "template", type: "string", label: "Filename Template",
-        default: "%(title)s [%(id)s].%(ext)s",
-        helpText: "Fields: %(title)s %(id)s %(uploader)s %(upload_date)s %(ext)s",
+        key: "format", type: "enum", label: "Audio Format", default: "mp3",
+        options: [
+          { value: "mp3", label: "MP3" },
+          { value: "aac", label: "AAC / M4A" },
+          { value: "wav", label: "WAV" },
+          { value: "flac", label: "FLAC" },
+          { value: "opus", label: "Opus" },
+        ],
       },
-      { key: "restrict", type: "boolean", label: "Restrict to ASCII-safe names", default: false },
+      { key: "bitrate", type: "string", label: "Bitrate", default: "192k", placeholder: "128k / 192k / 320k" },
     ],
   },
   {
-    id: "thumbnail-download",
-    name: "Thumbnail Download",
-    description: "Save the cover image alongside the media.",
-    tier: 3, category: "metadata", accepts: "both",
+    id: "video-only",
+    name: "Video Only",
+    description: "Strip all audio and keep only the video stream.",
+    tier: 1, category: "video", accepts: "video",
+    icon: Icons.Video,
+    params: [],
+  },
+  {
+    id: "to-gif",
+    name: "Export as GIF",
+    description: "Turn a segment into a looping animated GIF.",
+    tier: 1, category: "video", accepts: "video",
     icon: Icons.Image,
     params: [
-      { key: "all", type: "boolean", label: "Download all thumbnail sizes", default: false },
+      { key: "start", type: "string", label: "Start", default: "00:00:00" },
+      { key: "duration", type: "integer", label: "Duration", default: 3, min: 1, max: 60, unit: "s" },
+      { key: "fps", type: "integer", label: "FPS", default: 12, min: 5, max: 30 },
+      { key: "width", type: "integer", label: "Width", default: 480, min: 120, max: 1280, unit: "px" },
+    ],
+  },
+  {
+    id: "thumbnail",
+    name: "Extract Thumbnail",
+    description: "Grab a single frame as an image.",
+    tier: 1, category: "video", accepts: "both",
+    icon: Icons.Image,
+    params: [
+      { key: "at", type: "string", label: "At Time", default: "00:00:05", placeholder: "HH:MM:SS or seconds" },
       {
-        key: "format", type: "enum", label: "Convert To", default: "jpg",
+        key: "format", type: "enum", label: "Format", default: "jpg",
         options: [
           { value: "jpg", label: "JPEG" },
           { value: "png", label: "PNG" },
@@ -429,238 +320,446 @@ const OPERATIONS: Operation[] = [
     ],
   },
   {
-    id: "info-json",
-    name: "Info JSON Export",
-    description: "Write full metadata to a .info.json file.",
-    tier: 3, category: "metadata", accepts: "both",
-    icon: Icons.Info, favorite: true,
+    id: "concat",
+    name: "Concatenate",
+    description: "Join multiple source files end-to-end. Upload more than one file.",
+    tier: 1, category: "container", accepts: "both",
+    icon: Icons.Flow,
     params: [
-      { key: "comments", type: "boolean", label: "Include comments (slow)", default: false },
+      {
+        key: "mode", type: "enum", label: "Mode", default: "reencode",
+        options: [
+          { value: "reencode", label: "Re-encode (safe)" },
+          { value: "copy", label: "Stream copy (fast)" },
+        ],
+      },
     ],
   },
   {
-    id: "download-archive",
-    name: "Download Archive",
-    description: "Skip already-downloaded items via an archive file.",
-    tier: 3, category: "metadata", accepts: "both",
-    icon: Icons.Archive,
+    id: "inspect",
+    name: "Inspect Media",
+    description: "Dump stream, codec, and container metadata.",
+    tier: 1, category: "analysis", accepts: "both",
+    icon: Icons.Info,
+    params: [],
+  },
+
+  /* ─── Tier 2: Intermediate ───────────────────────────────────────────── */
+  {
+    id: "scale",
+    name: "Resize / Scale",
+    description: "Change resolution with a quality scaler.",
+    tier: 2, category: "video", accepts: "video",
+    icon: Icons.Settings, favorite: true,
     params: [
-      { key: "archiveFile", type: "string", label: "Archive File", default: "archive.txt" },
+      { key: "width", type: "integer", label: "Width", group: "Dimensions", default: 1280, min: 16, max: 7680, unit: "px" },
+      { key: "height", type: "integer", label: "Height", group: "Dimensions", default: 720, min: 16, max: 4320, unit: "px" },
+      {
+        key: "preserveAspect", type: "boolean", label: "Preserve aspect ratio", group: "Dimensions", default: true,
+      },
+      {
+        key: "scaler", type: "enum", label: "Scaler", group: "Quality", default: "lanczos",
+        options: [
+          { value: "fast_bilinear", label: "Fast bilinear" },
+          { value: "bilinear", label: "Bilinear" },
+          { value: "bicubic", label: "Bicubic" },
+          { value: "lanczos", label: "Lanczos" },
+          { value: "spline", label: "Spline" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "fps",
+    name: "Frame Rate",
+    description: "Convert the video to a different frame rate.",
+    tier: 2, category: "video", accepts: "video",
+    icon: Icons.Clock,
+    params: [
+      {
+        key: "fps", type: "enum", label: "Frame Rate", default: "30",
+        options: [
+          { value: "24", label: "24 fps" },
+          { value: "25", label: "25 fps" },
+          { value: "30", label: "30 fps" },
+          { value: "50", label: "50 fps" },
+          { value: "60", label: "60 fps" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "crop",
+    name: "Crop",
+    description: "Cut away borders or regions with precise coordinates.",
+    tier: 2, category: "video", accepts: "video",
+    icon: Icons.Crop,
+    params: [
+      { key: "w", type: "integer", label: "Width", default: 1280, min: 16 },
+      { key: "h", type: "integer", label: "Height", default: 720, min: 16 },
+      { key: "x", type: "integer", label: "X Offset", default: 0, min: 0 },
+      { key: "y", type: "integer", label: "Y Offset", default: 0, min: 0 },
+    ],
+  },
+  {
+    id: "rotate",
+    name: "Rotate / Flip",
+    description: "Rotate by 90/180/270 or flip horizontally and vertically.",
+    tier: 2, category: "video", accepts: "video",
+    icon: Icons.Rotate,
+    params: [
+      {
+        key: "dir", type: "enum", label: "Transform", default: "90cw",
+        options: [
+          { value: "90cw", label: "90 clockwise" },
+          { value: "90ccw", label: "90 counter-clockwise" },
+          { value: "180", label: "180 degrees" },
+          { value: "hflip", label: "Flip horizontal" },
+          { value: "vflip", label: "Flip vertical" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "pad",
+    name: "Pad",
+    description: "Add borders around the video with a background color.",
+    tier: 2, category: "video", accepts: "video",
+    icon: Icons.Crop,
+    params: [
+      { key: "w", type: "integer", label: "Output Width", default: 1920, min: 16 },
+      { key: "h", type: "integer", label: "Output Height", default: 1080, min: 16 },
+      { key: "x", type: "integer", label: "X Offset", default: 0 },
+      { key: "y", type: "integer", label: "Y Offset", default: 0 },
+      { key: "color", type: "string", label: "Fill Color", default: "black", placeholder: "black / white / #RRGGBB" },
+    ],
+  },
+  {
+    id: "volume",
+    name: "Volume",
+    description: "Adjust audio gain by a fixed amount in dB.",
+    tier: 2, category: "audio", accepts: "both",
+    icon: Icons.Music,
+    params: [
+      { key: "gain", type: "number", label: "Gain", default: 0, min: -60, max: 60, step: 0.5, unit: "dB" },
+    ],
+  },
+  {
+    id: "metadata",
+    name: "Metadata Tags",
+    description: "Write title, artist, and language tags into the file.",
+    tier: 2, category: "metadata", accepts: "both",
+    icon: Icons.File,
+    params: [
+      { key: "title", type: "string", label: "Title", default: "" },
+      { key: "artist", type: "string", label: "Artist", default: "" },
+      { key: "language", type: "string", label: "Language", default: "eng", placeholder: "ISO 639-2 code" },
+    ],
+  },
+  {
+    id: "speed",
+    name: "Speed",
+    description: "Apply fast or slow motion with optional pitch preservation.",
+    tier: 2, category: "audio", accepts: "both",
+    icon: Icons.Bolt,
+    params: [
+      { key: "factor", type: "number", label: "Speed Factor", default: 1, min: 0.25, max: 4, step: 0.25, unit: "x" },
+      { key: "keepPitch", type: "boolean", label: "Preserve audio pitch", default: true },
     ],
   },
 
-  /* ─── Tier 4 ─────────────────────────────────────────────────────────── */
+  /* ─── Tier 3: Advanced Video ─────────────────────────────────────────── */
   {
-    id: "cookies-browser",
-    name: "Cookies from Browser",
-    description: "Load auth cookies from your local browser.",
-    tier: 4, category: "auth", accepts: "both",
-    icon: Icons.Lock, favorite: true,
+    id: "denoise",
+    name: "Denoise",
+    description: "Reduce video noise while preserving edges.",
+    tier: 3, category: "video", accepts: "video",
+    icon: Icons.Sparkle,
     params: [
       {
-        key: "browser", type: "enum", label: "Browser", default: "chrome",
+        key: "strength", type: "enum", label: "Strength", default: "medium",
         options: [
-          { value: "chrome", label: "Chrome" },
-          { value: "firefox", label: "Firefox" },
-          { value: "edge", label: "Edge" },
-          { value: "brave", label: "Brave" },
-          { value: "safari", label: "Safari" },
-          { value: "chromium", label: "Chromium" },
-          { value: "opera", label: "Opera" },
-          { value: "vivaldi", label: "Vivaldi" },
+          { value: "light", label: "Light" },
+          { value: "medium", label: "Medium" },
+          { value: "strong", label: "Strong" },
         ],
       },
-      { key: "profile", type: "string", label: "Profile (optional)", placeholder: "Default", advanced: true },
-    ],
-  },
-  {
-    id: "cookies-file",
-    name: "Cookies File",
-    description: "Use a Netscape cookies.txt file.",
-    tier: 4, category: "auth", accepts: "both",
-    icon: Icons.Lock,
-    params: [
-      { key: "cookieFile", type: "string", label: "Path to cookies.txt", placeholder: "/path/cookies.txt" },
-    ],
-  },
-  {
-    id: "proxy-config",
-    name: "Proxy Configuration",
-    description: "Route traffic through a proxy.",
-    tier: 4, category: "auth", accepts: "both",
-    icon: Icons.Globe,
-    params: [
-      { key: "proxy", type: "string", label: "Proxy URL", placeholder: "socks5://127.0.0.1:1080" },
-    ],
-  },
-  {
-    id: "sub-download",
-    name: "Subtitle Download",
-    description: "Download subtitles in chosen languages.",
-    tier: 4, category: "subs", accepts: "video",
-    icon: Icons.Subtitle, favorite: true,
-    params: [
-      { key: "langs", type: "string", label: "Languages", default: "en", placeholder: "en,ja,es or all" },
       {
-        key: "format", type: "enum", label: "Format", default: "srt",
+        key: "algo", type: "enum", label: "Algorithm", default: "hqdn3d", advanced: true,
+        options: [
+          { value: "hqdn3d", label: "hqdn3d (fast)" },
+          { value: "nlmeans", label: "nlmeans (quality)" },
+          { value: "bm3d", label: "bm3d (best)" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "sharpen",
+    name: "Sharpen",
+    description: "Enhance edge detail with the unsharp mask filter.",
+    tier: 3, category: "video", accepts: "video",
+    icon: Icons.Sparkle,
+    params: [
+      { key: "amount", type: "number", label: "Amount", default: 1, min: 0, max: 3, step: 0.1 },
+      { key: "size", type: "integer", label: "Kernel Size", default: 5, min: 3, max: 23, step: 2 },
+    ],
+  },
+  {
+    id: "blur",
+    name: "Blur",
+    description: "Apply Gaussian, box, or edge-preserving blur.",
+    tier: 3, category: "video", accepts: "video",
+    icon: Icons.Sparkle,
+    params: [
+      { key: "radius", type: "integer", label: "Radius", default: 5, min: 1, max: 50, unit: "px" },
+      {
+        key: "type", type: "enum", label: "Blur Type", default: "gblur",
+        options: [
+          { value: "gblur", label: "Gaussian" },
+          { value: "boxblur", label: "Box" },
+          { value: "bilateral", label: "Bilateral (edge preserving)" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "chromakey",
+    name: "Chroma Key",
+    description: "Remove green or blue screens with alpha keying.",
+    tier: 3, category: "video", accepts: "video",
+    icon: Icons.Sparkle,
+    params: [
+      { key: "color", type: "string", label: "Key Color", default: "#00FF00", placeholder: "#00FF00" },
+      { key: "similarity", type: "number", label: "Similarity", default: 0.3, min: 0.01, max: 1, step: 0.01, helpText: "0.01 = exact match only" },
+      { key: "blend", type: "number", label: "Edge Blend", default: 0.1, min: 0, max: 1, step: 0.01 },
+    ],
+  },
+  {
+    id: "overlay",
+    name: "Image Overlay",
+    description: "Composite a logo or watermark. Upload a second file to use as the overlay.",
+    tier: 3, category: "video", accepts: "video",
+    icon: Icons.Image,
+    params: [
+      {
+        key: "position", type: "enum", label: "Position", default: "br",
+        options: [
+          { value: "tl", label: "Top-left" },
+          { value: "tr", label: "Top-right" },
+          { value: "bl", label: "Bottom-left" },
+          { value: "br", label: "Bottom-right" },
+          { value: "center", label: "Center" },
+        ],
+      },
+      { key: "margin", type: "integer", label: "Margin", default: 16, min: 0, max: 200, unit: "px" },
+      { key: "opacity", type: "number", label: "Opacity", default: 1, min: 0, max: 1, step: 0.05 },
+    ],
+  },
+  {
+    id: "hdr-to-sdr",
+    name: "HDR to SDR",
+    description: "Tone map HDR10 or HLG content down to SDR.",
+    tier: 3, category: "video", accepts: "video",
+    icon: Icons.Sparkle,
+    params: [
+      {
+        key: "algo", type: "enum", label: "Tone Map", default: "hable",
+        options: [
+          { value: "clip", label: "Clip" },
+          { value: "hable", label: "Hable (recommended)" },
+          { value: "reinhard", label: "Reinhard" },
+          { value: "mobius", label: "Mobius" },
+        ],
+      },
+      { key: "peak", type: "integer", label: "Target Peak", default: 100, min: 80, max: 1000, unit: "nits" },
+    ],
+  },
+
+  /* ─── Tier 4: Advanced Audio ─────────────────────────────────────────── */
+  {
+    id: "loudnorm",
+    name: "Loudness Normalization",
+    description: "Normalize to a target LUFS with true-peak limiting (EBU R128).",
+    tier: 4, category: "audio", accepts: "both",
+    icon: Icons.Music, favorite: true,
+    params: [
+      {
+        key: "target", type: "enum", label: "Target", default: "-16",
+        options: [
+          { value: "-23", label: "-23 LUFS (broadcast)" },
+          { value: "-16", label: "-16 LUFS (podcast)" },
+          { value: "-14", label: "-14 LUFS (streaming)" },
+        ],
+      },
+      { key: "truePeak", type: "number", label: "Max True Peak", default: -2, min: -9, max: 0, unit: "dBTP" },
+      { key: "lra", type: "number", label: "Loudness Range", default: 7, min: 1, max: 50, unit: "LU" },
+    ],
+  },
+  {
+    id: "compressor",
+    name: "Dynamic Compression",
+    description: "Reduce dynamic range using acompressor.",
+    tier: 4, category: "audio", accepts: "both",
+    icon: Icons.Settings,
+    params: [
+      { key: "threshold", type: "number", label: "Threshold", default: -20, min: -60, max: 0, unit: "dB" },
+      { key: "ratio", type: "number", label: "Ratio", default: 2, min: 1, max: 20, step: 0.5 },
+      { key: "attack", type: "integer", label: "Attack", default: 20, min: 1, max: 2000, unit: "ms" },
+      { key: "release", type: "integer", label: "Release", default: 250, min: 1, max: 9000, unit: "ms" },
+    ],
+  },
+  {
+    id: "eq",
+    name: "Parametric EQ",
+    description: "Apply a peaking equalizer band with adjustable Q.",
+    tier: 4, category: "audio", accepts: "both",
+    icon: Icons.Settings,
+    params: [
+      { key: "freq", type: "integer", label: "Frequency", default: 1000, min: 20, max: 20000, unit: "Hz" },
+      { key: "gain", type: "number", label: "Gain", default: 0, min: -20, max: 20, step: 0.5, unit: "dB" },
+      { key: "q", type: "number", label: "Q Factor", default: 1, min: 0.1, max: 10, step: 0.1 },
+    ],
+  },
+  {
+    id: "noise-reduce",
+    name: "Noise Reduction",
+    description: "Reduce broadband noise via spectral subtraction.",
+    tier: 4, category: "audio", accepts: "both",
+    icon: Icons.Sparkle,
+    params: [
+      { key: "reduction", type: "number", label: "Reduction", default: 12, min: 0.01, max: 97, unit: "dB" },
+      { key: "floor", type: "number", label: "Noise Floor", default: -50, min: -80, max: -20, unit: "dB", advanced: true },
+    ],
+  },
+  {
+    id: "de-ess",
+    name: "De-essing",
+    description: "Reduce harsh sibilance from vocals.",
+    tier: 4, category: "audio", accepts: "both",
+    icon: Icons.Music,
+    params: [
+      { key: "intensity", type: "number", label: "Intensity", default: 0.5, min: 0, max: 1, step: 0.05 },
+      { key: "amount", type: "number", label: "Ducking Amount", default: 0.5, min: 0, max: 1, step: 0.05 },
+    ],
+  },
+
+  /* ─── Tier 5: Chained Presets ────────────────────────────────────────── */
+  {
+    id: "youtube-preset",
+    name: "YouTube Upload",
+    description: "Scale to 1080p, H.264 CRF 18, AAC 192k, faststart MP4.",
+    tier: 5, category: "chain", accepts: "video",
+    icon: Icons.Bolt, favorite: true,
+    chainSteps: ["scale", "convert"],
+    params: [
+      {
+        key: "resolution", type: "enum", label: "Resolution", default: "1080p",
+        options: [
+          { value: "720p", label: "720p" },
+          { value: "1080p", label: "1080p" },
+          { value: "1440p", label: "1440p" },
+          { value: "4k", label: "4K" },
+        ],
+      },
+      { key: "crf", type: "integer", label: "Quality (CRF)", default: 18, min: 0, max: 51, helpText: "Lower = better quality" },
+      { key: "audioBitrate", type: "string", label: "Audio Bitrate", default: "192k" },
+    ],
+  },
+  {
+    id: "social-vertical",
+    name: "Social Vertical",
+    description: "Crop to 9:16, scale to 1080x1920, normalize loudness.",
+    tier: 5, category: "chain", accepts: "video",
+    icon: Icons.Crop,
+    chainSteps: ["crop", "scale", "loudnorm"],
+    params: [
+      {
+        key: "fit", type: "enum", label: "Fit Mode", default: "crop",
+        options: [
+          { value: "crop", label: "Crop center" },
+          { value: "pad", label: "Pad with blur" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "web-optimized",
+    name: "Web Optimized",
+    description: "Two-pass H.264, 720p, AAC 128k, faststart for delivery.",
+    tier: 5, category: "chain", accepts: "video",
+    icon: Icons.Globe || Icons.Bolt,
+    chainSteps: ["scale", "convert"],
+    params: [
+      { key: "crf", type: "integer", label: "Quality (CRF)", default: 23, min: 0, max: 51 },
+    ],
+  },
+  {
+    id: "stabilize",
+    name: "Video Stabilization",
+    description: "Two-pass deshake using vidstabdetect and vidstabtransform.",
+    tier: 5, category: "chain", accepts: "video",
+    icon: Icons.Sparkle,
+    chainSteps: ["vidstabdetect", "vidstabtransform"],
+    params: [
+      { key: "shakiness", type: "integer", label: "Shakiness", default: 5, min: 1, max: 10 },
+      { key: "smoothing", type: "integer", label: "Smoothing Frames", default: 10, min: 0, max: 100 },
+      { key: "zoom", type: "number", label: "Zoom", default: 0, min: -50, max: 100, unit: "%" },
+    ],
+  },
+
+  /* ─── Tier 6: Expert ─────────────────────────────────────────────────── */
+  {
+    id: "subtitle-embed",
+    name: "Embed Subtitles",
+    description: "Mux a subtitle file into the video. Upload the .srt or .ass as a second file.",
+    tier: 6, category: "subtitle", accepts: "video",
+    icon: Icons.Type,
+    params: [],
+  },
+  {
+    id: "hardsub",
+    name: "Burn Subtitles",
+    description: "Permanently render subtitles into the video frames.",
+    tier: 6, category: "subtitle", accepts: "video",
+    icon: Icons.Type, favorite: true,
+    params: [
+      { key: "fontSize", type: "integer", label: "Font Size", default: 24, min: 8, max: 120 },
+      { key: "color", type: "string", label: "Font Color", default: "#FFFFFF" },
+      { key: "outline", type: "integer", label: "Outline", default: 2, min: 0, max: 8 },
+    ],
+  },
+  {
+    id: "subtitle-extract",
+    name: "Extract Subtitles",
+    description: "Pull embedded subtitle streams out into separate files.",
+    tier: 6, category: "subtitle", accepts: "both",
+    icon: Icons.Type,
+    params: [
+      {
+        key: "format", type: "enum", label: "Output Format", default: "srt",
         options: [
           { value: "srt", label: "SRT" },
           { value: "ass", label: "ASS" },
           { value: "vtt", label: "VTT" },
-          { value: "lrc", label: "LRC" },
-          { value: "best", label: "Best available" },
         ],
       },
     ],
   },
   {
-    id: "embed-subs",
-    name: "Embed Subtitles",
-    description: "Mux subtitles into the media file.",
-    tier: 4, category: "subs", accepts: "video",
-    icon: Icons.Subtitle,
-    params: [
-      { key: "langs", type: "string", label: "Languages", default: "en" },
-    ],
-  },
-  {
-    id: "embed-thumbnail",
-    name: "Embed Thumbnail",
-    description: "Attach the thumbnail as cover art.",
-    tier: 4, category: "metadata", accepts: "both",
-    icon: Icons.Image,
-    params: [],
-  },
-  {
-    id: "embed-metadata",
-    name: "Embed Metadata",
-    description: "Write title, artist, and date tags into the file.",
-    tier: 4, category: "metadata", accepts: "both",
-    icon: Icons.Info,
-    params: [
-      { key: "chapters", type: "boolean", label: "Include chapters", default: true },
-    ],
-  },
-
-  /* ─── Tier 5 ─────────────────────────────────────────────────────────── */
-  {
-    id: "music-pipeline",
-    name: "Music Download Pipeline",
-    description: "Extract audio as MP3, embed metadata and cover art.",
-    tier: 5, category: "chain", accepts: "both",
-    icon: Icons.Music, favorite: true,
-    chainSteps: ["audio-mp3", "embed-thumbnail", "embed-metadata"],
-    params: [
-      {
-        key: "quality", type: "enum", label: "Audio Quality", default: "320K",
-        options: [
-          { value: "128K", label: "128 kbps" },
-          { value: "192K", label: "192 kbps" },
-          { value: "256K", label: "256 kbps" },
-          { value: "320K", label: "320 kbps" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "archive-pipeline",
-    name: "Archival Pipeline",
-    description: "Best video plus subs, thumbnail, metadata, and archive tracking.",
-    tier: 5, category: "chain", accepts: "video",
-    icon: Icons.Archive,
-    chainSteps: ["quick-best", "sub-download", "thumbnail-download", "info-json", "download-archive"],
-    params: [
-      { key: "subLangs", type: "string", label: "Subtitle Languages", default: "en" },
-      { key: "archiveFile", type: "string", label: "Archive File", default: "archive.txt" },
-    ],
-  },
-  {
-    id: "social-clip",
-    name: "Social Clip",
-    description: "Cap at 1080p, embed subtitles, quick download.",
-    tier: 5, category: "chain", accepts: "video",
-    icon: Icons.Video,
-    chainSteps: ["resolution-cap", "sub-download", "embed-subs"],
-    params: [
-      { key: "subLangs", type: "string", label: "Subtitle Languages", default: "en" },
-    ],
-  },
-
-  /* ─── Tier 6 ─────────────────────────────────────────────────────────── */
-  {
-    id: "sponsorblock-mark",
-    name: "SponsorBlock Mark",
-    description: "Mark sponsor, intro, and outro sections as chapters.",
-    tier: 6, category: "expert", accepts: "video",
-    icon: Icons.Shield,
-    params: [
-      {
-        key: "categories", type: "multiselect", label: "Categories",
-        default: ["sponsor", "intro", "outro"],
-        options: [
-          { value: "sponsor", label: "Sponsor" },
-          { value: "intro", label: "Intro" },
-          { value: "outro", label: "Outro" },
-          { value: "selfpromo", label: "Self-promotion" },
-          { value: "preview", label: "Preview" },
-          { value: "filler", label: "Filler" },
-          { value: "interaction", label: "Interaction reminder" },
-          { value: "music_offtopic", label: "Non-music section" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "sponsorblock-remove",
-    name: "SponsorBlock Remove",
-    description: "Cut sponsor segments from the downloaded file.",
-    tier: 6, category: "expert", accepts: "video",
-    icon: Icons.Shield,
-    params: [
-      {
-        key: "categories", type: "multiselect", label: "Remove Categories",
-        default: ["sponsor"],
-        options: [
-          { value: "sponsor", label: "Sponsor" },
-          { value: "intro", label: "Intro" },
-          { value: "outro", label: "Outro" },
-          { value: "selfpromo", label: "Self-promotion" },
-          { value: "preview", label: "Preview" },
-          { value: "filler", label: "Filler" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "extractor-args",
-    name: "Extractor Arguments",
-    description: "Pass custom args to specific extractors.",
-    tier: 6, category: "expert", accepts: "both",
+    id: "bitstream-filter",
+    name: "Bitstream Filter",
+    description: "Apply a bitstream-level transform for container compatibility.",
+    tier: 6, category: "container", accepts: "both",
     icon: Icons.Terminal,
     params: [
       {
-        key: "extractor", type: "enum", label: "Extractor", default: "youtube",
+        key: "filter", type: "enum", label: "Filter", default: "h264_mp4toannexb",
         options: [
-          { value: "youtube", label: "YouTube" },
-          { value: "generic", label: "Generic" },
-          { value: "tiktok", label: "TikTok" },
-          { value: "twitter", label: "Twitter / X" },
-          { value: "soundcloud", label: "SoundCloud" },
+          { value: "h264_mp4toannexb", label: "h264_mp4toannexb" },
+          { value: "hevc_mp4toannexb", label: "hevc_mp4toannexb" },
+          { value: "extract_extradata", label: "extract_extradata" },
         ],
-      },
-      { key: "args", type: "string", label: "Arguments", placeholder: "player_client=default,-web" },
-    ],
-  },
-  {
-    id: "split-chapters",
-    name: "Split by Chapters",
-    description: "Split the download into per-chapter files.",
-    tier: 6, category: "expert", accepts: "both",
-    icon: Icons.Flow,
-    params: [
-      {
-        key: "template", type: "string", label: "Chapter Template",
-        default: "%(title)s - %(section_number)02d - %(section_title)s.%(ext)s",
       },
     ],
   },
@@ -698,20 +797,26 @@ function defaultValues(op: Operation): FormValues {
   return out;
 }
 
-function acceptsSource(op: Operation, kind: "audio" | "video"): boolean {
-  return op.accepts === "both" || op.accepts === kind;
-}
-
-function shortUrl(u: string): string {
-  return u.length > 44 ? u.slice(0, 41) + "..." : u;
+function acceptsSource(op: Operation, kind: AssetKind): boolean {
+  if (op.accepts === "both") return true;
+  if (op.accepts === "audio") return kind === "audio";
+  if (op.accepts === "video") return kind === "video" || kind === "image";
+  return true;
 }
 
 function formatBytes(bytes?: number): string {
-  if (!bytes) return "-";
+  if (bytes === undefined) return "-";
   const units = ["B", "KB", "MB", "GB"];
   let n = bytes, i = 0;
   while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
   return n.toFixed(1) + " " + units[i];
+}
+
+function kindFromFile(name: string): AssetKind {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (["mp3", "wav", "flac", "aac", "m4a", "ogg", "opus"].includes(ext)) return "audio";
+  if (["png", "jpg", "jpeg", "webp", "gif", "bmp"].includes(ext)) return "image";
+  return "video";
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -719,22 +824,45 @@ function formatBytes(bytes?: number): string {
    ══════════════════════════════════════════════════════════════════════════ */
 
 const API = {
-  async inspect(url: string): Promise<MediaInfo> {
-    const res = await fetch("/api/op/inspect", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+  async upload(
+    file: File,
+    onProgress?: (percent: number) => void
+  ): Promise<Asset> {
+    return new Promise((resolve, reject) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/ffmpeg/upload");
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      };
+      xhr.onload = () => {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300 && data.ok) {
+            resolve(data.asset as Asset);
+          } else {
+            reject(new Error(data.error || "Upload failed"));
+          }
+        } catch {
+          reject(new Error("Invalid response from server"));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Network error during upload"));
+      xhr.send(fd);
     });
-    const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || "Failed to inspect");
-    return data.info as MediaInfo;
   },
 
-  async run(url: string, operations: OperationPayload[]): Promise<string> {
-    const res = await fetch("/api/op/run", {
+  async run(
+    inputs: { id: string; role: string }[],
+    operations: OperationPayload[]
+  ): Promise<string> {
+    const res = await fetch("/api/ffmpeg/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, operations }),
+      body: JSON.stringify({ inputs, operations }),
     });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || "Failed to start job");
@@ -742,7 +870,7 @@ const API = {
   },
 
   async job(jobId: string): Promise<JobProgress> {
-    const res = await fetch("/api/op/job/" + jobId);
+    const res = await fetch("/api/ffmpeg/job/" + jobId);
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || "Failed to fetch job");
     return data.job as JobProgress;
@@ -1029,16 +1157,25 @@ function Empty({ title, hint }: { title: string; hint?: string }) {
   );
 }
 
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="stat">
+      <span className="statValue">{value}</span>
+      <span className="statLabel">{label}</span>
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    MAIN PAGE
    ══════════════════════════════════════════════════════════════════════════ */
 
-export default function OpPage() {
+export default function FfmpegPage() {
   const [view, setView] = useState<View>("home");
   const [sheet, setSheet] = useState<SheetKind>(null);
 
-  const [url, setUrl] = useState("");
-  const [info, setInfo] = useState<MediaInfo | null>(null);
+  const [asset, setAsset] = useState<Asset | null>(null);
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [selectedOp, setSelectedOp] = useState<Operation | null>(null);
   const [values, setValues] = useState<FormValues>({});
   const [pipeline, setPipeline] = useState<PipelineStep[]>([]);
@@ -1049,24 +1186,24 @@ export default function OpPage() {
   const [jobId, setJobId] = useState<string | null>(null);
   const { job, error: pollError } = useJobPoll(view === "run" || view === "result" ? jobId : null);
 
-  const inspect = useAsync<MediaInfo>();
   const runJob = useAsync<string>();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   /* ── Derived ─────────────────────────────────────────────────────────── */
   const visibleOps = useMemo(() => {
     const ranges: Record<TierFilter, [number, number]> = {
-      all: [1, 6], basic: [1, 1], quality: [2, 2], files: [3, 3],
-      auth: [4, 4], presets: [5, 5], expert: [6, 6],
+      all: [1, 6], basic: [1, 1], intermediate: [2, 2], video: [3, 3],
+      audio: [4, 4], chains: [5, 5], expert: [6, 6],
     };
     const [lo, hi] = ranges[tierFilter];
     const q = search.trim().toLowerCase();
     return OPERATIONS.filter((op) => {
       if (op.tier < lo || op.tier > hi) return false;
-      if (info && !acceptsSource(op, info.kind)) return false;
+      if (asset && !acceptsSource(op, asset.kind)) return false;
       if (!q) return true;
       return (op.name + op.description + op.category).toLowerCase().includes(q);
     });
-  }, [tierFilter, search, info]);
+  }, [tierFilter, search, asset]);
 
   const grouped = useMemo(() => {
     const map = new Map<number, Operation[]>();
@@ -1078,21 +1215,38 @@ export default function OpPage() {
   }, [visibleOps]);
 
   const favorites = useMemo(
-    () => OPERATIONS.filter((o) => o.favorite && (!info || acceptsSource(o, info.kind))),
-    [info]
+    () => OPERATIONS.filter((o) => o.favorite && (!asset || acceptsSource(o, asset.kind))),
+    [asset]
   );
 
-  /* ── Actions ─────────────────────────────────────────────────────────── */
-  async function handleInspect() {
-    if (!url.trim()) return;
-    const result = await inspect.run(() => API.inspect(url.trim()));
-    if (result) setInfo(result);
-  }
+  /* ── Handlers ────────────────────────────────────────────────────────── */
+  const handleFile = useCallback(async (file: File) => {
+    setUploadPercent(0);
+    try {
+      const uploaded = await API.upload(file, (p) => setUploadPercent(p));
+      setAsset(uploaded);
+      setUploadPercent(null);
+    } catch (err) {
+      setUploadPercent(null);
+      alert(err instanceof Error ? err.message : "Upload failed");
+    }
+  }, []);
+
+  const onFilePick = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) handleFile(f);
+    e.target.value = "";
+  }, [handleFile]);
+
+  const onDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const f = e.dataTransfer.files?.[0];
+    if (f) handleFile(f);
+  }, [handleFile]);
 
   function openConfigure(op: Operation) {
     setSelectedOp(op);
-    const dv = defaultValues(op);
-    setValues(dv);
+    setValues(defaultValues(op));
     setSheet("configure");
   }
 
@@ -1123,12 +1277,13 @@ export default function OpPage() {
   }
 
   async function handleRun() {
-    if (!info || pipeline.length === 0) return;
+    if (!asset || pipeline.length === 0) return;
+    const inputs = [{ id: asset.id, role: "main" }];
     const operations: OperationPayload[] = pipeline.map((s) => ({
       id: s.op.id,
       params: s.values,
     }));
-    const result = await runJob.run(() => API.run(info.url, operations));
+    const result = await runJob.run(() => API.run(inputs, operations));
     if (result) {
       setJobId(result);
       setView("run");
@@ -1138,17 +1293,15 @@ export default function OpPage() {
   function resetAll() {
     setJobId(null);
     setPipeline([]);
+    setAsset(null);
     setView("home");
   }
 
-  /* ── Auto-advance on completion ─────────────────────────────────────── */
+  /* ── Auto-advance ────────────────────────────────────────────────────── */
   useEffect(() => {
     if (view === "run" && job?.status === "completed") {
       const t = setTimeout(() => setView("result"), 500);
       return () => clearTimeout(t);
-    }
-    if (view === "run" && job?.status === "failed") {
-      // stay on run view but no auto-advance
     }
   }, [view, job]);
 
@@ -1165,25 +1318,22 @@ export default function OpPage() {
         </button>
         <div className="title">
           <span className="titleMain">{headerTitle(view)}</span>
-          <span className="titleSub">{headerSub(view, pipeline, info, job)}</span>
+          <span className="titleSub">{headerSub(view, pipeline, asset, job)}</span>
         </div>
       </header>
 
       <main className="main">
         {view === "home" && (
           <HomeView
-            url={url}
-            setUrl={setUrl}
-            info={info}
-            loading={inspect.loading}
-            error={inspect.error}
-            onInspect={handleInspect}
+            asset={asset}
+            uploadPercent={uploadPercent}
+            onPickFile={() => fileInputRef.current?.click()}
+            onDrop={onDrop}
+            onRemoveAsset={() => setAsset(null)}
             onOpenOp={openConfigure}
             onBrowse={() => setView("catalog")}
             onOpenPipeline={() => setView("pipeline")}
-            onOpenFormats={() => setSheet("formats")}
-            onOpenSubs={() => setSheet("subs")}
-            onOpenInfo={() => setSheet("info")}
+            onOpenAsset={() => setSheet("asset")}
             favorites={favorites}
           />
         )}
@@ -1201,7 +1351,7 @@ export default function OpPage() {
 
         {view === "pipeline" && (
           <PipelineView
-            info={info}
+            asset={asset}
             pipeline={pipeline}
             onAdd={() => setView("catalog")}
             onRemove={removeStep}
@@ -1218,12 +1368,12 @@ export default function OpPage() {
         )}
 
         {view === "run" && (
-          <RunView info={info} pipeline={pipeline} job={job} error={pollError} />
+          <RunView asset={asset} pipeline={pipeline} job={job} error={pollError} />
         )}
 
         {view === "result" && (
           <ResultView
-            info={info}
+            asset={asset}
             job={job}
             onAgain={() => {
               setJobId(null);
@@ -1250,6 +1400,14 @@ export default function OpPage() {
         />
       </nav>
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        style={{ display: "none" }}
+        onChange={onFilePick}
+        accept="video/*,audio/*,image/*"
+      />
+
       {sheet === "configure" && selectedOp && (
         <ConfigureSheet
           op={selectedOp}
@@ -1260,31 +1418,39 @@ export default function OpPage() {
         />
       )}
 
-      {sheet === "info" && info && (
-        <Sheet title="Media Info" onClose={() => setSheet(null)} note="Metadata returned by the inspector.">
-          <InfoList info={info} />
-        </Sheet>
-      )}
-
-      {sheet === "formats" && info && (
+      {sheet === "asset" && asset && (
         <Sheet
-          title="Available Formats"
-          badge={String(info.formats.length) + " formats"}
+          title="Source Asset"
+          badge={asset.kind}
           onClose={() => setSheet(null)}
-          note="Enumerated from the extractor."
+          note="This file will be uploaded to the server when you run the pipeline."
         >
-          <FormatList formats={info.formats} />
-        </Sheet>
-      )}
-
-      {sheet === "subs" && info && (
-        <Sheet
-          title="Subtitles"
-          badge={String(info.subtitles.length) + " languages"}
-          onClose={() => setSheet(null)}
-          note="Manual and auto-generated captions."
-        >
-          <SubList subs={info.subtitles} />
+          <div className="infoList">
+            <div className="infoRow">
+              <span className="infoKey">Name</span>
+              <span className="infoVal">{asset.name}</span>
+            </div>
+            <div className="infoRow">
+              <span className="infoKey">Kind</span>
+              <span className="infoVal">{asset.kind}</span>
+            </div>
+            <div className="infoRow">
+              <span className="infoKey">Size</span>
+              <span className="infoVal">{formatBytes(asset.sizeBytes)}</span>
+            </div>
+            {asset.duration && (
+              <div className="infoRow">
+                <span className="infoKey">Duration</span>
+                <span className="infoVal">{asset.duration}</span>
+              </div>
+            )}
+            {asset.meta && (
+              <div className="infoRow">
+                <span className="infoKey">Details</span>
+                <span className="infoVal">{asset.meta}</span>
+              </div>
+            )}
+          </div>
         </Sheet>
       )}
     </div>
@@ -1296,19 +1462,19 @@ export default function OpPage() {
    ══════════════════════════════════════════════════════════════════════════ */
 
 function headerTitle(v: View): string {
-  return { home: "Downloads", catalog: "Operations", pipeline: "Pipeline", run: "Working", result: "Done" }[v];
+  return { home: "Media Studio", catalog: "Operations", pipeline: "Pipeline", run: "Working", result: "Done" }[v];
 }
 
 function headerSub(
   v: View,
   pipeline: PipelineStep[],
-  info: MediaInfo | null,
+  asset: Asset | null,
   job: JobProgress | null
 ): string {
-  if (v === "home") return info ? shortUrl(info.title) : "paste a URL to start";
+  if (v === "home") return asset ? asset.name : "no source loaded";
   if (v === "catalog") return String(pipeline.length) + " in pipeline";
   if (v === "pipeline") return pipeline.length ? String(pipeline.length) + " steps" : "empty";
-  if (v === "run") return job ? job.status + " · " + String(job.percent) + "%" : "starting...";
+  if (v === "run") return job ? job.status + " · " + String(Math.round(job.percent)) + "%" : "starting...";
   return "output ready";
 }
 
@@ -1317,90 +1483,98 @@ function headerSub(
    ══════════════════════════════════════════════════════════════════════════ */
 
 function HomeView({
-  url, setUrl, info, loading, error, onInspect, onOpenOp, onBrowse, onOpenPipeline,
-  onOpenFormats, onOpenSubs, onOpenInfo, favorites,
+  asset, uploadPercent, onPickFile, onDrop, onRemoveAsset,
+  onOpenOp, onBrowse, onOpenPipeline, onOpenAsset, favorites,
 }: {
-  url: string;
-  setUrl: (s: string) => void;
-  info: MediaInfo | null;
-  loading: boolean;
-  error: string | null;
-  onInspect: () => void;
+  asset: Asset | null;
+  uploadPercent: number | null;
+  onPickFile: () => void;
+  onDrop: (e: DragEvent<HTMLDivElement>) => void;
+  onRemoveAsset: () => void;
   onOpenOp: (op: Operation) => void;
   onBrowse: () => void;
   onOpenPipeline: () => void;
-  onOpenFormats: () => void;
-  onOpenSubs: () => void;
-  onOpenInfo: () => void;
+  onOpenAsset: () => void;
   favorites: Operation[];
 }) {
   const quickPicks: { id: string; label: string; icon: ComponentType<IconProps> }[] = [
-    { id: "quick-best", label: "Best", icon: Icons.Bolt },
-    { id: "audio-mp3", label: "MP3", icon: Icons.Music },
-    { id: "resolution-cap", label: "1080p", icon: Icons.Video },
-    { id: "section-download", label: "Cut", icon: Icons.Scissors },
+    { id: "convert", label: "Convert", icon: Icons.Archive },
+    { id: "trim", label: "Trim", icon: Icons.Scissors },
+    { id: "scale", label: "Scale", icon: Icons.Settings },
+    { id: "youtube-preset", label: "YouTube", icon: Icons.Bolt },
   ];
+
+  const isUploading = uploadPercent !== null && uploadPercent < 100;
 
   return (
     <div className="pad">
-      <section className="card urlCard">
-        <div className="urlHead">
-          <Icons.Link />
-          <span>Source URL</span>
-        </div>
-        <input
-          className="urlInput"
-          placeholder="YouTube, TikTok, Twitter, SoundCloud, direct URL..."
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && url && !loading) onInspect();
-          }}
-        />
-        <button className="primaryBtn" onClick={onInspect} disabled={!url || loading}>
-          {loading ? "Inspecting..." : "Inspect"}
-        </button>
-        {error && (
-          <div className="errorBox">
-            <Icons.Warn /> {error}
+      {!asset ? (
+        <section
+          className={"card dropCard " + (isUploading ? "dropCardBusy" : "")}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={isUploading ? undefined : onDrop}
+          onClick={isUploading ? undefined : onPickFile}
+        >
+          {isUploading ? (
+            <>
+              <div className="dropIcon"><Icons.Upload /></div>
+              <div className="dropTitle">Uploading…</div>
+              <div className="dropProgress">
+                <div className="dropProgressBar" style={{ width: String(uploadPercent) + "%" }} />
+              </div>
+              <span className="dropHint">{uploadPercent}%</span>
+            </>
+          ) : (
+            <>
+              <div className="dropIcon"><Icons.Upload /></div>
+              <div className="dropTitle">Add a media file</div>
+              <span className="dropHint">
+                Drop a video, audio, or image here, or tap to browse.
+              </span>
+            </>
+          )}
+        </section>
+      ) : (
+        <section className="card assetCard" onClick={onOpenAsset}>
+          <div className="assetIcon">
+            {asset.kind === "audio" ? <Icons.Music /> : asset.kind === "image" ? <Icons.Image /> : <Icons.Video />}
           </div>
-        )}
-      </section>
-
-      {info && (
-        <section className="card mediaCard">
-          <div className="mediaThumb">
-            <Icons.Play size={28} />
-            <span className="mediaDuration">{info.duration}</span>
-          </div>
-          <div className="mediaMeta">
-            <span className="mediaTitle">{info.title}</span>
-            <span className="mediaSub">{info.uploader}</span>
-            <span className="mediaStats">
-              {info.views} · {info.uploadedAt} · {info.kind}
+          <div className="assetMeta">
+            <span className="assetLabel">Source</span>
+            <span className="assetName">{asset.name}</span>
+            <span className="assetInfo">
+              {formatBytes(asset.sizeBytes)}
+              {asset.duration ? " · " + asset.duration : ""}
+              {" · "}{asset.kind}
             </span>
           </div>
-          <div className="mediaActions">
-            <button className="miniBtn" onClick={onOpenFormats}>
-              <Icons.Video size={14} /> {info.formats.length} formats
+          <div className="assetActions">
+            <button
+              className="miniBtn"
+              onClick={(e) => { e.stopPropagation(); onPickFile(); }}
+              type="button"
+            >
+              Replace
             </button>
-            <button className="miniBtn" onClick={onOpenSubs}>
-              <Icons.Subtitle size={14} /> {info.subtitles.length} subs
-            </button>
-            <button className="miniBtn" onClick={onOpenInfo}>
-              <Icons.Info size={14} /> Details
+            <button
+              className="miniBtn miniBtnDanger"
+              onClick={(e) => { e.stopPropagation(); onRemoveAsset(); }}
+              type="button"
+              aria-label="Remove"
+            >
+              <Icons.Trash />
             </button>
           </div>
         </section>
       )}
 
-      {info && (
+      {asset && (
         <section>
           <div className="rowHead"><h3 className="sectionTitle">Quick Actions</h3></div>
           <div className="quickGrid">
             {quickPicks.map((qp) => {
               const op = OPERATIONS.find((o) => o.id === qp.id);
-              if (!op || !acceptsSource(op, info.kind)) return null;
+              if (!op || !acceptsSource(op, asset.kind)) return null;
               const Icon = qp.icon;
               return (
                 <button key={qp.id} className="quickCard" onClick={() => onOpenOp(op)}>
@@ -1413,7 +1587,7 @@ function HomeView({
         </section>
       )}
 
-      {info && favorites.length > 0 && (
+      {asset && favorites.length > 0 && (
         <section>
           <div className="rowHead">
             <h3 className="sectionTitle">Favorites</h3>
@@ -1443,7 +1617,9 @@ function HomeView({
           <Icons.Flow />
           <div className="pipelinePreviewText">
             <span className="pipelinePreviewTitle">Chain operations</span>
-            <span className="pipelinePreviewSub">Queue multiple steps and run them in sequence</span>
+            <span className="pipelinePreviewSub">
+              Queue multiple steps and run them in sequence
+            </span>
           </div>
           <Icons.Chevron />
         </button>
@@ -1508,9 +1684,9 @@ function CatalogView({
 }
 
 function PipelineView({
-  info, pipeline, onAdd, onRemove, onMove, onRun, running, error, onEdit,
+  asset, pipeline, onAdd, onRemove, onMove, onRun, running, error, onEdit,
 }: {
-  info: MediaInfo | null;
+  asset: Asset | null;
   pipeline: PipelineStep[];
   onAdd: () => void;
   onRemove: (uid: string) => void;
@@ -1524,10 +1700,12 @@ function PipelineView({
     <div className="pad">
       <section className="flowWrap">
         <div className="flowNode">
-          <div className="flowNodeIcon"><Icons.Link /></div>
+          <div className="flowNodeIcon">
+            {asset?.kind === "audio" ? <Icons.Music /> : asset?.kind === "image" ? <Icons.Image /> : <Icons.File />}
+          </div>
           <div className="flowNodeBody">
             <span className="flowNodeLabel">Source</span>
-            <span className="flowNodeValue">{info?.title ?? "No source loaded"}</span>
+            <span className="flowNodeValue">{asset?.name ?? "No file loaded"}</span>
           </div>
         </div>
 
@@ -1577,8 +1755,8 @@ function PipelineView({
       {pipeline.length > 0 && (
         <section className="card statsCard">
           <Stat label="Steps" value={String(pipeline.length)} />
-          <Stat label="Source" value={info?.kind ?? "-"} />
-          <Stat label="Duration" value={info?.duration ?? "-"} />
+          <Stat label="Source" value={asset?.kind ?? "-"} />
+          <Stat label="Input" value={asset ? formatBytes(asset.sizeBytes) : "-"} />
         </section>
       )}
 
@@ -1589,7 +1767,7 @@ function PipelineView({
       <button
         className="primaryBtn"
         onClick={onRun}
-        disabled={!info || !pipeline.length || running}
+        disabled={!asset || !pipeline.length || running}
       >
         {running ? "Starting..." : "Start"}
       </button>
@@ -1597,19 +1775,10 @@ function PipelineView({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="stat">
-      <span className="statValue">{value}</span>
-      <span className="statLabel">{label}</span>
-    </div>
-  );
-}
-
 function RunView({
-  info, pipeline, job, error,
+  asset, pipeline, job, error,
 }: {
-  info: MediaInfo | null;
+  asset: Asset | null;
   pipeline: PipelineStep[];
   job: JobProgress | null;
   error: string | null;
@@ -1641,7 +1810,7 @@ function RunView({
           </div>
         </div>
         <div className="runMeta">
-          <span className="runSource">{info?.title ?? "..."}</span>
+          <span className="runSource">{asset?.name ?? "..."}</span>
           <span className="runStep">
             {job?.step ? job.step : `Step ${activeIndex + 1} of ${pipeline.length}`}
           </span>
@@ -1649,7 +1818,6 @@ function RunView({
       </section>
 
       {error && <div className="errorBox"><Icons.Warn /> {error}</div>}
-
       {job?.error && <div className="errorBox"><Icons.Warn /> {job.error}</div>}
 
       <section className="card logCard">
@@ -1689,9 +1857,9 @@ function RunView({
 }
 
 function ResultView({
-  info, job, onAgain, onHome,
+  asset, job, onAgain, onHome,
 }: {
-  info: MediaInfo | null;
+  asset: Asset | null;
   job: JobProgress | null;
   onAgain: () => void;
   onHome: () => void;
@@ -1705,8 +1873,8 @@ function ResultView({
         <div className={"resultIcon " + (ok ? "" : "resultIconFail")}>
           {ok ? <Icons.Check size={28} /> : <Icons.Warn size={28} />}
         </div>
-        <h2 className="resultTitle">{ok ? "Download complete" : "Download failed"}</h2>
-        <p className="resultSub">{job?.error || info?.title || ""}</p>
+        <h2 className="resultTitle">{ok ? "Processing complete" : "Processing failed"}</h2>
+        <p className="resultSub">{job?.error || asset?.name || ""}</p>
       </section>
 
       {primary && (
@@ -1714,9 +1882,7 @@ function ResultView({
           <div className="videoThumb"><Icons.Play size={28} /></div>
           <div className="videoMeta">
             <span className="videoName">{primary.name}</span>
-            <span className="videoInfo">
-              {formatBytes(primary.sizeBytes)}
-            </span>
+            <span className="videoInfo">{formatBytes(primary.sizeBytes)}</span>
           </div>
         </section>
       )}
@@ -1809,78 +1975,22 @@ function ConfigureSheet({
   );
 }
 
-function InfoList({ info }: { info: MediaInfo }) {
-  const rows: [string, string][] = [
-    ["ID", info.id],
-    ["Title", info.title],
-    ["Uploader", info.uploader],
-    ["Kind", info.kind],
-    ["Duration", info.duration],
-    ["Views", info.views],
-    ["Uploaded", info.uploadedAt],
-    ["Formats", String(info.formats.length)],
-    ["Subtitles", String(info.subtitles.length)],
-  ];
-  return (
-    <div className="infoList">
-      {rows.map(([k, v]) => (
-        <div key={k} className="infoRow">
-          <span className="infoKey">{k}</span>
-          <span className="infoVal">{v}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function FormatList({ formats }: { formats: MediaFormat[] }) {
-  return (
-    <div className="formatList">
-      {formats.map((f) => (
-        <div key={f.id} className="formatRow">
-          <span className="formatId">{f.id}</span>
-          <div className="formatBody">
-            <span className="formatLabel">{f.label}</span>
-            <span className="formatMeta">{f.ext} · {f.size} · {f.note}</span>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SubList({ subs }: { subs: Subtitle[] }) {
-  return (
-    <div className="formatList">
-      {subs.map((s, i) => (
-        <div key={s.lang + i} className="formatRow">
-          <span className="formatId">{s.lang}</span>
-          <div className="formatBody">
-            <span className="formatLabel">{s.label}</span>
-            <span className="formatMeta">{s.auto ? "auto-generated" : "manual"}</span>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /* ══════════════════════════════════════════════════════════════════════════
    STYLES
    ══════════════════════════════════════════════════════════════════════════ */
 
 const STYLES = `
-:root {
-  --bg:#f7f6f2; --surface:#fff; --surface-2:#fbfaf7;
-  --border:#e7e5de; --border-strong:#d6d3c9;
-  --ink:#14171a; --ink-soft:#5b6065; --ink-mute:#8a8f95;
-  --accent:#4f46e5; --accent-soft:#eef2ff;
-  --render:#2e9c7a; --render-soft:#e8f8f1;
-  --warn:#d97706; --warn-soft:#fef4e6;
-  --danger:#dc2626; --danger-soft:#fdeaea;
+:root{
+  --bg:#f7f6f2;--surface:#fff;--surface-2:#fbfaf7;
+  --border:#e7e5de;--border-strong:#d6d3c9;
+  --ink:#14171a;--ink-soft:#5b6065;--ink-mute:#8a8f95;
+  --accent:#4f46e5;--accent-soft:#eef2ff;
+  --render:#2e9c7a;--render-soft:#e8f8f1;
+  --warn:#d97706;--warn-soft:#fef4e6;
+  --danger:#dc2626;--danger-soft:#fdeaea;
   --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   --font-mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
-  --radius:14px; --radius-lg:20px;
+  --radius:14px;--radius-lg:20px;
 }
 .app{min-height:100vh;background:var(--bg);color:var(--ink);font-family:var(--font-sans);display:flex;flex-direction:column;padding-bottom:76px}
 .topbar{display:flex;align-items:center;gap:10px;padding:14px 16px 8px;position:sticky;top:0;background:var(--bg);z-index:5}
@@ -1897,22 +2007,25 @@ const STYLES = `
 .empty{text-align:center;padding:40px 12px;color:var(--ink-mute);display:flex;flex-direction:column;gap:6px}
 .empty p{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin:0}
 .empty span{font-size:12px}
-
-.urlCard{display:flex;flex-direction:column;gap:10px}
-.urlHead{display:flex;align-items:center;gap:8px;color:var(--ink-soft);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
-.urlInput{width:100%;padding:11px 14px;border-radius:12px;border:1px solid var(--border);background:var(--bg);font-size:14px;font-family:var(--font-mono);color:var(--ink);-webkit-appearance:none}
 .errorBox{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:var(--danger-soft);color:var(--danger);font-size:12.5px;font-weight:500}
 
-.mediaCard{display:flex;flex-direction:column;gap:12px;padding:12px}
-.mediaThumb{position:relative;height:150px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#1e293b,#334155);display:flex;align-items:center;justify-content:center;color:#fff}
-.mediaDuration{position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,.7);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px;font-family:var(--font-mono)}
-.mediaMeta{display:flex;flex-direction:column;gap:3px}
-.mediaTitle{font-size:14px;font-weight:600;line-height:1.3}
-.mediaSub{font-size:12.5px;color:var(--ink-soft)}
-.mediaStats{font-size:11.5px;color:var(--ink-mute);font-family:var(--font-mono)}
-.mediaActions{display:flex;gap:6px;flex-wrap:wrap}
-.miniBtn{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--border);font-size:11.5px;color:var(--ink-soft);cursor:pointer;font-family:var(--font-mono)}
-.miniBtn:hover{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.dropCard{display:flex;flex-direction:column;align-items:center;gap:10px;padding:32px 20px;border:1.5px dashed var(--border-strong);background:var(--surface-2);cursor:pointer;text-align:center;transition:background .15s,border-color .15s}
+.dropCard:hover{background:var(--accent-soft);border-color:var(--accent)}
+.dropCardBusy{cursor:default}
+.dropCardBusy:hover{background:var(--surface-2);border-color:var(--border-strong)}
+.dropIcon{width:52px;height:52px;border-radius:14px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center}
+.dropTitle{font-size:15px;font-weight:600}
+.dropHint{font-size:12.5px;color:var(--ink-soft);line-height:1.5;max-width:280px}
+.dropProgress{width:220px;height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:4px}
+.dropProgressBar{height:100%;background:var(--accent);transition:width .15s ease}
+
+.assetCard{display:flex;align-items:center;gap:12px;cursor:pointer}
+.assetIcon{width:46px;height:46px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.assetMeta{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.assetLabel{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-mute);font-weight:600}
+.assetName{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.assetInfo{font-size:11.5px;color:var(--ink-soft);font-family:var(--font-mono)}
+.assetActions{display:flex;gap:6px}
 
 .quickGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .quickCard{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:11.5px;font-weight:500;color:var(--ink)}
@@ -1978,6 +2091,9 @@ const STYLES = `
 .primaryBtn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px 18px;background:var(--ink);color:#fff;border:none;border-radius:999px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font-sans)}
 .primaryBtn:disabled{opacity:.4;cursor:default}
 .ghostBtnWide{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px 18px;background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:999px;font-size:13.5px;font-weight:600;cursor:pointer}
+.miniBtn{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--border);font-size:11.5px;color:var(--ink-soft);cursor:pointer;font-family:var(--font-mono)}
+.miniBtn:hover{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.miniBtnDanger:hover{background:var(--danger-soft);color:var(--danger);border-color:var(--danger)}
 
 .runHeader{display:flex;align-items:center;gap:20px;padding:20px}
 .runRingWrap{position:relative;width:110px;height:110px;flex-shrink:0}
@@ -2057,12 +2173,6 @@ textarea{resize:vertical;font-family:var(--font-mono);font-size:12.5px}
 .infoRow:last-child{border-bottom:none}
 .infoKey{font-size:12px;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
 .infoVal{font-size:13px;text-align:right;font-family:var(--font-mono);word-break:break-word}
-.formatList{display:flex;flex-direction:column;gap:6px}
-.formatRow{display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;background:var(--bg);border:1px solid var(--border)}
-.formatId{min-width:44px;text-align:center;font-family:var(--font-mono);font-size:12px;font-weight:700;padding:4px 8px;background:var(--accent-soft);color:var(--accent);border-radius:6px}
-.formatBody{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
-.formatLabel{font-size:13px;font-weight:600}
-.formatMeta{font-size:11.5px;color:var(--ink-mute);font-family:var(--font-mono)}
 
 .bottomNav{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:space-around;align-items:center;padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--border);z-index:30}
 .navBtn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 12px;background:transparent;border:none;cursor:pointer;color:var(--ink-mute)}
@@ -2076,9 +2186,9 @@ textarea{resize:vertical;font-family:var(--font-mono);font-size:12.5px}
 }
 `;
 
-if (typeof document !== "undefined" && !document.getElementById("op-page-styles")) {
+if (typeof document !== "undefined" && !document.getElementById("ffmpeg-page-styles")) {
   const el = document.createElement("style");
-  el.id = "op-page-styles";
+  el.id = "ffmpeg-page-styles";
   el.textContent = STYLES;
   document.head.appendChild(el);
 }

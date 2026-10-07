@@ -1,8 +1,19 @@
 // app/ffmpeg/page.tsx
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, ComponentType, DragEvent, ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type {
+  ChangeEvent,
+  ComponentType,
+  DragEvent,
+  ReactNode,
+} from "react";
 
 /* ══════════════════════════════════════════════════════════════════════════
    TYPES
@@ -20,7 +31,11 @@ type ParamType =
   | "textarea";
 
 type Option = { value: string; label: string };
-type Condition = { param: string; operator: "eq" | "neq" | "truthy" | "falsy"; value?: unknown };
+type Condition = {
+  param: string;
+  operator: "eq" | "neq" | "truthy" | "falsy";
+  value?: unknown;
+};
 type MediaKind = "audio" | "video" | "both";
 
 type Param = {
@@ -90,7 +105,7 @@ type PipelineStep = { uid: string; op: Operation; values: FormValues };
    ICONS
    ══════════════════════════════════════════════════════════════════════════ */
 
-const s = {
+const svgProps = {
   fill: "none",
   stroke: "currentColor",
   strokeWidth: 1.6,
@@ -100,100 +115,186 @@ const s = {
 
 const Icons = {
   Back: ({ size = 20 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M15 5 8 12l7 7" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="M15 5 8 12l7 7" />
+    </svg>
   ),
   Close: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M6 6l12 12M18 6 6 18" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
   ),
   Chevron: ({ size = 16 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="m9 6 6 6-6 6" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="m9 6 6 6-6 6" />
+    </svg>
   ),
   Play: ({ size = 20 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.3v13.4a1 1 0 0 0 1.53.85l10.7-6.7a1 1 0 0 0 0-1.7L9.53 4.45A1 1 0 0 0 8 5.3Z" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M8 5.3v13.4a1 1 0 0 0 1.53.85l10.7-6.7a1 1 0 0 0 0-1.7L9.53 4.45A1 1 0 0 0 8 5.3Z" />
+    </svg>
   ),
   Check: ({ size = 16 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="m5 12 5 5L20 7" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="m5 12 5 5L20 7" />
+    </svg>
   ),
   Plus: ({ size = 16 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M12 5v14M5 12h14" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="M12 5v14M5 12h14" />
+    </svg>
   ),
   Search: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-3.5-3.5" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
   ),
   Upload: ({ size = 22 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M12 19V8m0 0-4 4m4-4 4 4M5 5h14" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="M12 19V8m0 0-4 4m4-4 4 4M5 5h14" />
+    </svg>
   ),
   Download: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" />
+    </svg>
   ),
   Music: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M9 18V6l10-2v12" /><circle cx="6" cy="18" r="3" /><circle cx="16" cy="16" r="3" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="M9 18V6l10-2v12" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="16" cy="16" r="3" />
+    </svg>
   ),
   Video: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><rect x="3" y="6" width="13" height="12" rx="2" /><path d="m16 10 5-3v10l-5-3" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <rect x="3" y="6" width="13" height="12" rx="2" />
+      <path d="m16 10 5-3v10l-5-3" />
+    </svg>
   ),
   Image: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="1.8" /><path d="m4 18 5-5 4 4 3-3 4 4" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="9" cy="10" r="1.8" />
+      <path d="m4 18 5-5 4 4 3-3 4 4" />
+    </svg>
   ),
   File: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M6 3h8l4 4v14a1 1 0 0 1-1 1H"6a1 1  r="0 0 21-.1-1V45a1 1 0 0 1 1-1Z" /><path d="M14 3v5h5" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="M6 3h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M14 3v5h5" />
+    </svg>
   ),
   Archive: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <rect x="3" y="4" width="18" height="4" rx="1" />
+      <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" />
+    </svg>
   ),
   Bolt: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M13 3 4 14h6l-1 7 9-11h-6l1-7Z" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="M13 3 4 14h6l-1 7 9-11h-6l1-7Z" />
+    </svg>
   ),
   Terminal: ({ size = 16 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="m5 8 4 4-4 4M13 16h6" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="m5 8 4 4-4 4M13 16h6" />
+    </svg>
   ),
   Clock: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 7v5l3 2" />
+    </svg>
   ),
   Trash: ({ size = 14 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M7 7l1 12a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-12" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M7 7l1 12a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-12" />
+    </svg>
   ),
   Home: ({ size = 22 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1Z" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1Z" />
+    </svg>
   ),
   Grid: ({ size = 22 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <rect x="4" y="4" width="7" height="7" rx="1.5" />
+      <rect x="13" y="4" width="7" height="7" rx="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" />
+      <rect x="13" y="13" width="7" height="7" rx="1.5" />
+    </svg>
   ),
   Flow: ({ size = 22 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="12" r="2.5" /><circle cx="6" cy="18" /><path d="M8.5 6h4a3 3 0 0 1 3 3v.5M8.5 18h4a3 3 0 0 0 3-3v-.5" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <circle cx="6" cy="6" r="2.5" />
+      <circle cx="18" cy="12" r="2.5" />
+      <circle cx="6" cy="18" r="2.5" />
+      <path d="M8.5 6h4a3 3 0 0 1 3 3v.5M8.5 18h4a3 3 0 0 0 3-3v-.5" />
+    </svg>
   ),
   Up: ({ size = 14 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="m6 15 6-6 6 6" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="m6 15 6-6 6 6" />
+    </svg>
   ),
   Down: ({ size = 14 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="m6 9 6 6 6-6" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
   ),
   Warn: ({ size = 16 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M12 3 2 20h20L12 3Z" /><path d="M12 10v4M12 17h.01" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="M12 3 2 20h20L12 3Z" />
+      <path d="M12 10v4M12 17h.01" />
+    </svg>
   ),
   Info: ({ size = 16 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5M12 8h.01" />
+    </svg>
   ),
   Scissors: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <circle cx="6" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12" />
+    </svg>
   ),
   Settings: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
+    </svg>
   ),
   Sparkle: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6" />
+    </svg>
   ),
   Type: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M4 6V4h16v2M9 20h6M12 4v16" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="M4 6V4h16v2M9 20h6M12 4v16" />
+    </svg>
   ),
   Crop: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M6 2v16h16M2 6h16v16" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="M6 2v16h16M2 6h16v16" />
+    </svg>
   ),
   Rotate: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><path d="M4 12a8 8 0 1 0 3-6.3" /><path d="M4 5v4h4" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <path d="M4 12a8 8 0 1 0 3-6.3" />
+      <path d="M4 5v4h4" />
+    </svg>
   ),
   Globe: ({ size = 18 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" {...s}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></svg>
+    <svg width={size} height={size} viewBox="0 0 24 24" {...svgProps}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
+    </svg>
   ),
 };
 
@@ -228,11 +329,17 @@ const OPERATIONS: Operation[] = [
     id: "convert",
     name: "Format Conversion",
     description: "Convert any media file between container and codec formats.",
-    tier: 1, category: "container", accepts: "both",
-    icon: Icons.Archive, favorite: true,
+    tier: 1,
+    category: "container",
+    accepts: "both",
+    icon: Icons.Archive,
+    favorite: true,
     params: [
       {
-        key: "format", type: "enum", label: "Container", default: "mp4",
+        key: "format",
+        type: "enum",
+        label: "Container",
+        default: "mp4",
         options: [
           { value: "mp4", label: "MP4" },
           { value: "mkv", label: "Matroska (MKV)" },
@@ -241,21 +348,57 @@ const OPERATIONS: Operation[] = [
           { value: "avi", label: "AVI" },
         ],
       },
-      { key: "videoCodec", type: "string", label: "Video Codec", group: "Codecs", default: "libx264", placeholder: "libx264 / libvpx-vp9 / copy" },
-      { key: "audioCodec", type: "string", label: "Audio Codec", group: "Codecs", default: "aac", placeholder: "aac / libopus / copy" },
+      {
+        key: "videoCodec",
+        type: "string",
+        label: "Video Codec",
+        group: "Codecs",
+        default: "libx264",
+        placeholder: "libx264 / libvpx-vp9 / copy",
+      },
+      {
+        key: "audioCodec",
+        type: "string",
+        label: "Audio Codec",
+        group: "Codecs",
+        default: "aac",
+        placeholder: "aac / libopus / copy",
+      },
     ],
   },
   {
     id: "trim",
     name: "Precise Trim",
     description: "Cut a specific time range with frame accuracy.",
-    tier: 1, category: "video", accepts: "both",
-    icon: Icons.Scissors, favorite: true,
+    tier: 1,
+    category: "video",
+    accepts: "both",
+    icon: Icons.Scissors,
+    favorite: true,
     params: [
-      { key: "start", type: "string", label: "Start", group: "Range", default: "00:00:00", placeholder: "HH:MM:SS.ms", helpText: "Timecode or seconds." },
-      { key: "end", type: "string", label: "End", group: "Range", default: "", placeholder: "HH:MM:SS.ms" },
       {
-        key: "mode", type: "enum", label: "Mode", group: "Options", default: "reencode",
+        key: "start",
+        type: "string",
+        label: "Start",
+        group: "Range",
+        default: "00:00:00",
+        placeholder: "HH:MM:SS.ms",
+        helpText: "Timecode or seconds.",
+      },
+      {
+        key: "end",
+        type: "string",
+        label: "End",
+        group: "Range",
+        default: "",
+        placeholder: "HH:MM:SS.ms",
+      },
+      {
+        key: "mode",
+        type: "enum",
+        label: "Mode",
+        group: "Options",
+        default: "reencode",
         options: [
           { value: "reencode", label: "Re-encode (frame accurate)" },
           { value: "copy", label: "Stream copy (fast, keyframe only)" },
@@ -267,11 +410,16 @@ const OPERATIONS: Operation[] = [
     id: "extract-audio",
     name: "Extract Audio",
     description: "Pull the audio track out as a standalone file.",
-    tier: 1, category: "audio", accepts: "both",
+    tier: 1,
+    category: "audio",
+    accepts: "both",
     icon: Icons.Music,
     params: [
       {
-        key: "format", type: "enum", label: "Audio Format", default: "mp3",
+        key: "format",
+        type: "enum",
+        label: "Audio Format",
+        default: "mp3",
         options: [
           { value: "mp3", label: "MP3" },
           { value: "aac", label: "AAC / M4A" },
@@ -280,14 +428,22 @@ const OPERATIONS: Operation[] = [
           { value: "opus", label: "Opus" },
         ],
       },
-      { key: "bitrate", type: "string", label: "Bitrate", default: "192k", placeholder: "128k / 192k / 320k" },
+      {
+        key: "bitrate",
+        type: "string",
+        label: "Bitrate",
+        default: "192k",
+        placeholder: "128k / 192k / 320k",
+      },
     ],
   },
   {
     id: "video-only",
     name: "Video Only",
     description: "Strip all audio and keep only the video stream.",
-    tier: 1, category: "video", accepts: "video",
+    tier: 1,
+    category: "video",
+    accepts: "video",
     icon: Icons.Video,
     params: [],
   },
@@ -295,25 +451,54 @@ const OPERATIONS: Operation[] = [
     id: "to-gif",
     name: "Export as GIF",
     description: "Turn a segment into a looping animated GIF.",
-    tier: 1, category: "video", accepts: "video",
+    tier: 1,
+    category: "video",
+    accepts: "video",
     icon: Icons.Image,
     params: [
       { key: "start", type: "string", label: "Start", default: "00:00:00" },
-      { key: "duration", type: "integer", label: "Duration", default: 3, min: 1, max: 60, unit: "s" },
+      {
+        key: "duration",
+        type: "integer",
+        label: "Duration",
+        default: 3,
+        min: 1,
+        max: 60,
+        unit: "s",
+      },
       { key: "fps", type: "integer", label: "FPS", default: 12, min: 5, max: 30 },
-      { key: "width", type: "integer", label: "Width", default: 480, min: 120, max: 1280, unit: "px" },
+      {
+        key: "width",
+        type: "integer",
+        label: "Width",
+        default: 480,
+        min: 120,
+        max: 1280,
+        unit: "px",
+      },
     ],
   },
   {
     id: "thumbnail",
     name: "Extract Thumbnail",
     description: "Grab a single frame as an image.",
-    tier: 1, category: "video", accepts: "both",
+    tier: 1,
+    category: "video",
+    accepts: "both",
     icon: Icons.Image,
     params: [
-      { key: "at", type: "string", label: "At Time", default: "00:00:05", placeholder: "HH:MM:SS or seconds" },
       {
-        key: "format", type: "enum", label: "Format", default: "jpg",
+        key: "at",
+        type: "string",
+        label: "At Time",
+        default: "00:00:05",
+        placeholder: "HH:MM:SS or seconds",
+      },
+      {
+        key: "format",
+        type: "enum",
+        label: "Format",
+        default: "jpg",
         options: [
           { value: "jpg", label: "JPEG" },
           { value: "png", label: "PNG" },
@@ -326,11 +511,16 @@ const OPERATIONS: Operation[] = [
     id: "concat",
     name: "Concatenate",
     description: "Join multiple source files end-to-end.",
-    tier: 1, category: "container", accepts: "both",
+    tier: 1,
+    category: "container",
+    accepts: "both",
     icon: Icons.Flow,
     params: [
       {
-        key: "mode", type: "enum", label: "Mode", default: "reencode",
+        key: "mode",
+        type: "enum",
+        label: "Mode",
+        default: "reencode",
         options: [
           { value: "reencode", label: "Re-encode (safe)" },
           { value: "copy", label: "Stream copy (fast)" },
@@ -342,7 +532,9 @@ const OPERATIONS: Operation[] = [
     id: "inspect",
     name: "Inspect Media",
     description: "Dump stream, codec, and container metadata.",
-    tier: 1, category: "analysis", accepts: "both",
+    tier: 1,
+    category: "analysis",
+    accepts: "both",
     icon: Icons.Info,
     params: [],
   },
@@ -352,14 +544,45 @@ const OPERATIONS: Operation[] = [
     id: "scale",
     name: "Resize / Scale",
     description: "Change resolution with a quality scaler.",
-    tier: 2, category: "video", accepts: "video",
-    icon: Icons.Settings, favorite: true,
+    tier: 2,
+    category: "video",
+    accepts: "video",
+    icon: Icons.Settings,
+    favorite: true,
     params: [
-      { key: "width", type: "integer", label: "Width", group: "Dimensions", default: 1280, min: 16, max: 7680, unit: "px" },
-      { key: "height", type: "integer", label: "Height", group: "Dimensions", default: 720, min: 16, max: 4320, unit: "px" },
-      { key: "preserveAspect", type: "boolean", label: "Preserve aspect ratio", group: "Dimensions", default: true },
       {
-        key: "scaler", type: "enum", label: "Scaler", group: "Quality", default: "lanczos",
+        key: "width",
+        type: "integer",
+        label: "Width",
+        group: "Dimensions",
+        default: 1280,
+        min: 16,
+        max: 7680,
+        unit: "px",
+      },
+      {
+        key: "height",
+        type: "integer",
+        label: "Height",
+        group: "Dimensions",
+        default: 720,
+        min: 16,
+        max: 4320,
+        unit: "px",
+      },
+      {
+        key: "preserveAspect",
+        type: "boolean",
+        label: "Preserve aspect ratio",
+        group: "Dimensions",
+        default: true,
+      },
+      {
+        key: "scaler",
+        type: "enum",
+        label: "Scaler",
+        group: "Quality",
+        default: "lanczos",
         options: [
           { value: "fast_bilinear", label: "Fast bilinear" },
           { value: "bilinear", label: "Bilinear" },
@@ -374,11 +597,16 @@ const OPERATIONS: Operation[] = [
     id: "fps",
     name: "Frame Rate",
     description: "Convert the video to a different frame rate.",
-    tier: 2, category: "video", accepts: "video",
+    tier: 2,
+    category: "video",
+    accepts: "video",
     icon: Icons.Clock,
     params: [
       {
-        key: "fps", type: "enum", label: "Frame Rate", default: "30",
+        key: "fps",
+        type: "enum",
+        label: "Frame Rate",
+        default: "30",
         options: [
           { value: "24", label: "24 fps" },
           { value: "25", label: "25 fps" },
@@ -393,7 +621,9 @@ const OPERATIONS: Operation[] = [
     id: "crop",
     name: "Crop",
     description: "Cut away borders or regions with precise coordinates.",
-    tier: 2, category: "video", accepts: "video",
+    tier: 2,
+    category: "video",
+    accepts: "video",
     icon: Icons.Crop,
     params: [
       { key: "w", type: "integer", label: "Width", default: 1280, min: 16 },
@@ -406,11 +636,16 @@ const OPERATIONS: Operation[] = [
     id: "rotate",
     name: "Rotate / Flip",
     description: "Rotate by 90/180/270 or flip horizontally and vertically.",
-    tier: 2, category: "video", accepts: "video",
+    tier: 2,
+    category: "video",
+    accepts: "video",
     icon: Icons.Rotate,
     params: [
       {
-        key: "dir", type: "enum", label: "Transform", default: "90cw",
+        key: "dir",
+        type: "enum",
+        label: "Transform",
+        default: "90cw",
         options: [
           { value: "90cw", label: "90 clockwise" },
           { value: "90ccw", label: "90 counter-clockwise" },
@@ -425,47 +660,102 @@ const OPERATIONS: Operation[] = [
     id: "pad",
     name: "Pad",
     description: "Add borders around the video with a background color.",
-    tier: 2, category: "video", accepts: "video",
+    tier: 2,
+    category: "video",
+    accepts: "video",
     icon: Icons.Crop,
     params: [
-      { key: "w", type: "integer", label: "Output Width", default: 1920, min: 16 },
-      { key: "h", type: "integer", label: "Output Height", default: 1080, min: 16 },
+      {
+        key: "w",
+        type: "integer",
+        label: "Output Width",
+        default: 1920,
+        min: 16,
+      },
+      {
+        key: "h",
+        type: "integer",
+        label: "Output Height",
+        default: 1080,
+        min: 16,
+      },
       { key: "x", type: "integer", label: "X Offset", default: 0 },
       { key: "y", type: "integer", label: "Y Offset", default: 0 },
-      { key: "color", type: "string", label: "Fill Color", default: "black", placeholder: "black / white / #RRGGBB" },
+      {
+        key: "color",
+        type: "string",
+        label: "Fill Color",
+        default: "black",
+        placeholder: "black / white / #RRGGBB",
+      },
     ],
   },
   {
     id: "volume",
     name: "Volume",
     description: "Adjust audio gain by a fixed amount in dB.",
-    tier: 2, category: "audio", accepts: "both",
+    tier: 2,
+    category: "audio",
+    accepts: "both",
     icon: Icons.Music,
     params: [
-      { key: "gain", type: "number", label: "Gain", default: 0, min: -60, max: 60, step: 0.5, unit: "dB" },
+      {
+        key: "gain",
+        type: "number",
+        label: "Gain",
+        default: 0,
+        min: -60,
+        max: 60,
+        step: 0.5,
+        unit: "dB",
+      },
     ],
   },
   {
     id: "metadata",
     name: "Metadata Tags",
     description: "Write title, artist, and language tags into the file.",
-    tier: 2, category: "metadata", accepts: "both",
+    tier: 2,
+    category: "metadata",
+    accepts: "both",
     icon: Icons.File,
     params: [
       { key: "title", type: "string", label: "Title", default: "" },
       { key: "artist", type: "string", label: "Artist", default: "" },
-      { key: "language", type: "string", label: "Language", default: "eng", placeholder: "ISO 639-2 code" },
+      {
+        key: "language",
+        type: "string",
+        label: "Language",
+        default: "eng",
+        placeholder: "ISO 639-2 code",
+      },
     ],
   },
   {
     id: "speed",
     name: "Speed",
     description: "Apply fast or slow motion with optional pitch preservation.",
-    tier: 2, category: "audio", accepts: "both",
+    tier: 2,
+    category: "audio",
+    accepts: "both",
     icon: Icons.Bolt,
     params: [
-      { key: "factor", type: "number", label: "Speed Factor", default: 1, min: 0.25, max: 4, step: 0.25, unit: "x" },
-      { key: "keepPitch", type: "boolean", label: "Preserve audio pitch", default: true },
+      {
+        key: "factor",
+        type: "number",
+        label: "Speed Factor",
+        default: 1,
+        min: 0.25,
+        max: 4,
+        step: 0.25,
+        unit: "x",
+      },
+      {
+        key: "keepPitch",
+        type: "boolean",
+        label: "Preserve audio pitch",
+        default: true,
+      },
     ],
   },
 
@@ -473,12 +763,17 @@ const OPERATIONS: Operation[] = [
   {
     id: "denoise",
     name: "Denoise",
-    description: "Reduce video noise while preserving edges.",
-    tier: 3, category: "video", accepts: "video",
+    description: "Reduce video noise while preserving edge detail.",
+    tier: 3,
+    category: "video",
+    accepts: "video",
     icon: Icons.Sparkle,
     params: [
       {
-        key: "strength", type: "enum", label: "Strength", default: "medium",
+        key: "strength",
+        type: "enum",
+        label: "Strength",
+        default: "medium",
         options: [
           { value: "light", label: "Light" },
           { value: "medium", label: "Medium" },
@@ -486,7 +781,11 @@ const OPERATIONS: Operation[] = [
         ],
       },
       {
-        key: "algo", type: "enum", label: "Algorithm", default: "hqdn3d", advanced: true,
+        key: "algo",
+        type: "enum",
+        label: "Algorithm",
+        default: "hqdn3d",
+        advanced: true,
         options: [
           { value: "hqdn3d", label: "hqdn3d (fast)" },
           { value: "nlmeans", label: "nlmeans (quality)" },
@@ -499,23 +798,54 @@ const OPERATIONS: Operation[] = [
     id: "sharpen",
     name: "Sharpen",
     description: "Enhance edge detail with the unsharp mask filter.",
-    tier: 3, category: "video", accepts: "video",
+    tier: 3,
+    category: "video",
+    accepts: "video",
     icon: Icons.Sparkle,
     params: [
-      { key: "amount", type: "number", label: "Amount", default: 1, min: 0, max: 3, step: 0.1 },
-      { key: "size", type: "integer", label: "Kernel Size", default: 5, min: 3, max: 23, step: 2 },
+      {
+        key: "amount",
+        type: "number",
+        label: "Amount",
+        default: 1,
+        min: 0,
+        max: 3,
+        step: 0.1,
+      },
+      {
+        key: "size",
+        type: "integer",
+        label: "Kernel Size",
+        default: 5,
+        min: 3,
+        max: 23,
+        step: 2,
+      },
     ],
   },
   {
     id: "blur",
     name: "Blur",
     description: "Apply Gaussian, box, or edge-preserving blur.",
-    tier: 3, category: "video", accepts: "video",
+    tier: 3,
+    category: "video",
+    accepts: "video",
     icon: Icons.Sparkle,
     params: [
-      { key: "radius", type: "integer", label: "Radius", default: 5, min: 1, max: 50, unit: "px" },
       {
-        key: "type", type: "enum", label: "Blur Type", default: "gblur",
+        key: "radius",
+        type: "integer",
+        label: "Radius",
+        default: 5,
+        min: 1,
+        max: 50,
+        unit: "px",
+      },
+      {
+        key: "type",
+        type: "enum",
+        label: "Blur Type",
+        default: "gblur",
         options: [
           { value: "gblur", label: "Gaussian" },
           { value: "boxblur", label: "Box" },
@@ -528,23 +858,53 @@ const OPERATIONS: Operation[] = [
     id: "chromakey",
     name: "Chroma Key",
     description: "Remove green or blue screens with alpha keying.",
-    tier: 3, category: "video", accepts: "video",
+    tier: 3,
+    category: "video",
+    accepts: "video",
     icon: Icons.Sparkle,
     params: [
-      { key: "color", type: "string", label: "Key Color", default: "#00FF00", placeholder: "#00FF00" },
-      { key: "similarity", type: "number", label: "Similarity", default: 0.3, min: 0.01, max: 1, step: 0.01, helpText: "0.01 = exact match only" },
-      { key: "blend", type: "number", label: "Edge Blend", default: 0.1, min: 0, max: 1, step: 0.01 },
+      {
+        key: "color",
+        type: "string",
+        label: "Key Color",
+        default: "#00FF00",
+        placeholder: "#00FF00",
+      },
+      {
+        key: "similarity",
+        type: "number",
+        label: "Similarity",
+        default: 0.3,
+        min: 0.01,
+        max: 1,
+        step: 0.01,
+        helpText: "0.01 = exact match only",
+      },
+      {
+        key: "blend",
+        type: "number",
+        label: "Edge Blend",
+        default: 0.1,
+        min: 0,
+        max: 1,
+        step: 0.01,
+      },
     ],
   },
   {
     id: "overlay",
     name: "Image Overlay",
     description: "Composite a logo or watermark over the video.",
-    tier: 3, category: "video", accepts: "video",
+    tier: 3,
+    category: "video",
+    accepts: "video",
     icon: Icons.Image,
     params: [
       {
-        key: "position", type: "enum", label: "Position", default: "br",
+        key: "position",
+        type: "enum",
+        label: "Position",
+        default: "br",
         options: [
           { value: "tl", label: "Top-left" },
           { value: "tr", label: "Top-right" },
@@ -553,19 +913,40 @@ const OPERATIONS: Operation[] = [
           { value: "center", label: "Center" },
         ],
       },
-      { key: "margin", type: "integer", label: "Margin", default: 16, min: 0, max: 200, unit: "px" },
-      { key: "opacity", type: "number", label: "Opacity", default: 1, min: 0, max: 1, step: 0.05 },
+      {
+        key: "margin",
+        type: "integer",
+        label: "Margin",
+        default: 16,
+        min: 0,
+        max: 200,
+        unit: "px",
+      },
+      {
+        key: "opacity",
+        type: "number",
+        label: "Opacity",
+        default: 1,
+        min: 0,
+        max: 1,
+        step: 0.05,
+      },
     ],
   },
   {
     id: "hdr-to-sdr",
     name: "HDR to SDR",
     description: "Tone map HDR10 or HLG content down to SDR.",
-    tier: 3, category: "video", accepts: "video",
+    tier: 3,
+    category: "video",
+    accepts: "video",
     icon: Icons.Sparkle,
     params: [
       {
-        key: "algo", type: "enum", label: "Tone Map", default: "hable",
+        key: "algo",
+        type: "enum",
+        label: "Tone Map",
+        default: "hable",
         options: [
           { value: "clip", label: "Clip" },
           { value: "hable", label: "Hable (recommended)" },
@@ -573,7 +954,15 @@ const OPERATIONS: Operation[] = [
           { value: "mobius", label: "Mobius" },
         ],
       },
-      { key: "peak", type: "integer", label: "Target Peak", default: 100, min: 80, max: 1000, unit: "nits" },
+      {
+        key: "peak",
+        type: "integer",
+        label: "Target Peak",
+        default: 100,
+        min: 80,
+        max: 1000,
+        unit: "nits",
+      },
     ],
   },
 
@@ -582,66 +971,186 @@ const OPERATIONS: Operation[] = [
     id: "loudnorm",
     name: "Loudness Normalization",
     description: "Normalize to a target LUFS with true-peak limiting (EBU R128).",
-    tier: 4, category: "audio", accepts: "both",
-    icon: Icons.Music, favorite: true,
+    tier: 4,
+    category: "audio",
+    accepts: "both",
+    icon: Icons.Music,
+    favorite: true,
     params: [
       {
-        key: "target", type: "enum", label: "Target", default: "-16",
+        key: "target",
+        type: "enum",
+        label: "Target",
+        default: "-16",
         options: [
           { value: "-23", label: "-23 LUFS (broadcast)" },
           { value: "-16", label: "-16 LUFS (podcast)" },
           { value: "-14", label: "-14 LUFS (streaming)" },
         ],
       },
-      { key: "truePeak", type: "number", label: "Max True Peak", default: -2, min: -9, max: 0, unit: "dBTP" },
-      { key: "lra", type: "number", label: "Loudness Range", default: 7, min: 1, max: 50, unit: "LU" },
+      {
+        key: "truePeak",
+        type: "number",
+        label: "Max True Peak",
+        default: -2,
+        min: -9,
+        max: 0,
+        unit: "dBTP",
+      },
+      {
+        key: "lra",
+        type: "number",
+        label: "Loudness Range",
+        default: 7,
+        min: 1,
+        max: 50,
+        unit: "LU",
+      },
     ],
   },
   {
     id: "compressor",
     name: "Dynamic Compression",
     description: "Reduce dynamic range using acompressor.",
-    tier: 4, category: "audio", accepts: "both",
+    tier: 4,
+    category: "audio",
+    accepts: "both",
     icon: Icons.Settings,
     params: [
-      { key: "threshold", type: "number", label: "Threshold", default: -20, min: -60, max: 0, unit: "dB" },
-      { key: "ratio", type: "number", label: "Ratio", default: 2, min: 1, max: 20, step: 0.5 },
-      { key: "attack", type: "integer", label: "Attack", default: 20, min: 1, max: 2000, unit: "ms" },
-      { key: "release", type: "integer", label: "Release", default: 250, min: 1, max: 9000, unit: "ms" },
+      {
+        key: "threshold",
+        type: "number",
+        label: "Threshold",
+        default: -20,
+        min: -60,
+        max: 0,
+        unit: "dB",
+      },
+      {
+        key: "ratio",
+        type: "number",
+        label: "Ratio",
+        default: 2,
+        min: 1,
+        max: 20,
+        step: 0.5,
+      },
+      {
+        key: "attack",
+        type: "integer",
+        label: "Attack",
+        default: 20,
+        min: 1,
+        max: 2000,
+        unit: "ms",
+      },
+      {
+        key: "release",
+        type: "integer",
+        label: "Release",
+        default: 250,
+        min: 1,
+        max: 9000,
+        unit: "ms",
+      },
     ],
   },
   {
     id: "eq",
     name: "Parametric EQ",
     description: "Apply a peaking equalizer band with adjustable Q.",
-    tier: 4, category: "audio", accepts: "both",
+    tier: 4,
+    category: "audio",
+    accepts: "both",
     icon: Icons.Settings,
     params: [
-      { key: "freq", type: "integer", label: "Frequency", default: 1000, min: 20, max: 20000, unit: "Hz" },
-      { key: "gain", type: "number", label: "Gain", default: 0, min: -20, max: 20, step: 0.5, unit: "dB" },
-      { key: "q", type: "number", label: "Q Factor", default: 1, min: 0.1, max: 10, step: 0.1 },
+      {
+        key: "freq",
+        type: "integer",
+        label: "Frequency",
+        default: 1000,
+        min: 20,
+        max: 20000,
+        unit: "Hz",
+      },
+      {
+        key: "gain",
+        type: "number",
+        label: "Gain",
+        default: 0,
+        min: -20,
+        max: 20,
+        step: 0.5,
+        unit: "dB",
+      },
+      {
+        key: "q",
+        type: "number",
+        label: "Q Factor",
+        default: 1,
+        min: 0.1,
+        max: 10,
+        step: 0.1,
+      },
     ],
   },
   {
     id: "noise-reduce",
     name: "Noise Reduction",
     description: "Reduce broadband noise via spectral subtraction.",
-    tier: 4, category: "audio", accepts: "both",
+    tier: 4,
+    category: "audio",
+    accepts: "both",
     icon: Icons.Sparkle,
     params: [
-      { key: "reduction", type: "number", label: "Reduction", default: 12, min: 0.01, max: 97, unit: "dB" },
-      { key: "floor", type: "number", label: "Noise Floor", default: -50, min: -80, max: -20, unit: "dB", advanced: true },
+      {
+        key: "reduction",
+        type: "number",
+        label: "Reduction",
+        default: 12,
+        min: 0.01,
+        max: 97,
+        unit: "dB",
+      },
+      {
+        key: "floor",
+        type: "number",
+        label: "Noise Floor",
+        default: -50,
+        min: -80,
+        max: -20,
+        unit: "dB",
+        advanced: true,
+      },
     ],
   },
   {
     id: "de-ess",
     name: "De-essing",
     description: "Reduce harsh sibilance from vocals.",
-    tier: 4, category: "audio", accepts: "both",
+    tier: 4,
+    category: "audio",
+    accepts: "both",
     icon: Icons.Music,
     params: [
-      { key: "intensity", type: "number", label: "Intensity", default: 0.5, min: 0, max: 1, step: 0.05 },
-      { key: "amount", type: "number", label: "Ducking Amount", default: 0.5, min: 0, max: 1, step: 0.05 },
+      {
+        key: "intensity",
+        type: "number",
+        label: "Intensity",
+        default: 0.5,
+        min: 0,
+        max: 1,
+        step: 0.05,
+      },
+      {
+        key: "amount",
+        type: "number",
+        label: "Ducking Amount",
+        default: 0.5,
+        min: 0,
+        max: 1,
+        step: 0.05,
+      },
     ],
   },
 
@@ -650,12 +1159,18 @@ const OPERATIONS: Operation[] = [
     id: "youtube-preset",
     name: "YouTube Upload",
     description: "Scale to 1080p, H.264 CRF 18, AAC 192k, faststart MP4.",
-    tier: 5, category: "chain", accepts: "video",
-    icon: Icons.Bolt, favorite: true,
+    tier: 5,
+    category: "chain",
+    accepts: "video",
+    icon: Icons.Bolt,
+    favorite: true,
     chainSteps: ["scale", "convert"],
     params: [
       {
-        key: "resolution", type: "enum", label: "Resolution", default: "1080p",
+        key: "resolution",
+        type: "enum",
+        label: "Resolution",
+        default: "1080p",
         options: [
           { value: "720p", label: "720p" },
           { value: "1080p", label: "1080p" },
@@ -663,20 +1178,38 @@ const OPERATIONS: Operation[] = [
           { value: "4k", label: "4K" },
         ],
       },
-      { key: "crf", type: "integer", label: "Quality (CRF)", default: 18, min: 0, max: 51, helpText: "Lower = better quality" },
-      { key: "audioBitrate", type: "string", label: "Audio Bitrate", default: "192k" },
+      {
+        key: "crf",
+        type: "integer",
+        label: "Quality (CRF)",
+        default: 18,
+        min: 0,
+        max: 51,
+        helpText: "Lower = better quality",
+      },
+      {
+        key: "audioBitrate",
+        type: "string",
+        label: "Audio Bitrate",
+        default: "192k",
+      },
     ],
   },
   {
     id: "social-vertical",
     name: "Social Vertical",
     description: "Crop to 9:16, scale to 1080x1920, normalize loudness.",
-    tier: 5, category: "chain", accepts: "video",
+    tier: 5,
+    category: "chain",
+    accepts: "video",
     icon: Icons.Crop,
     chainSteps: ["crop", "scale", "loudnorm"],
     params: [
       {
-        key: "fit", type: "enum", label: "Fit Mode", default: "crop",
+        key: "fit",
+        type: "enum",
+        label: "Fit Mode",
+        default: "crop",
         options: [
           { value: "crop", label: "Crop center" },
           { value: "pad", label: "Pad with blur" },
@@ -688,24 +1221,57 @@ const OPERATIONS: Operation[] = [
     id: "web-optimized",
     name: "Web Optimized",
     description: "720p H.264, AAC 128k, faststart MP4 for delivery.",
-    tier: 5, category: "chain", accepts: "video",
+    tier: 5,
+    category: "chain",
+    accepts: "video",
     icon: Icons.Globe,
     chainSteps: ["scale", "convert"],
     params: [
-      { key: "crf", type: "integer", label: "Quality (CRF)", default: 23, min: 0, max: 51 },
+      {
+        key: "crf",
+        type: "integer",
+        label: "Quality (CRF)",
+        default: 23,
+        min: 0,
+        max: 51,
+      },
     ],
   },
   {
     id: "stabilize",
     name: "Video Stabilization",
-    description: "Two-pass deshake using vidstabdetect and vidstabtransform.",
-    tier: 5, category: "chain", accepts: "video",
+    description: "Two-pass deshake using vidstab detect/transform.",
+    tier: 5,
+    category: "chain",
+    accepts: "video",
     icon: Icons.Sparkle,
     chainSteps: ["vidstabdetect", "vidstabtransform"],
     params: [
-      { key: "shakiness", type: "integer", label: "Shakiness", default: 5, min: 1, max: 10 },
-      { key: "smoothing", type: "integer", label: "Smoothing Frames", default: 10, min: 0, max: 100 },
-      { key: "zoom", type: "number", label: "Zoom", default: 0, min: -50, max: 100, unit: "%" },
+      {
+        key: "shakiness",
+        type: "integer",
+        label: "Shakiness",
+        default: 5,
+        min: 1,
+        max: 10,
+      },
+      {
+        key: "smoothing",
+        type: "integer",
+        label: "Smoothing Frames",
+        default: 10,
+        min: 0,
+        max: 100,
+      },
+      {
+        key: "zoom",
+        type: "number",
+        label: "Zoom",
+        default: 0,
+        min: -50,
+        max: 100,
+        unit: "%",
+      },
     ],
   },
 
@@ -714,7 +1280,9 @@ const OPERATIONS: Operation[] = [
     id: "subtitle-embed",
     name: "Embed Subtitles",
     description: "Mux a subtitle file into the video as a soft track.",
-    tier: 6, category: "subtitle", accepts: "video",
+    tier: 6,
+    category: "subtitle",
+    accepts: "video",
     icon: Icons.Type,
     params: [],
   },
@@ -722,23 +1290,50 @@ const OPERATIONS: Operation[] = [
     id: "hardsub",
     name: "Burn Subtitles",
     description: "Permanently render subtitles into the video frames.",
-    tier: 6, category: "subtitle", accepts: "video",
-    icon: Icons.Type, favorite: true,
+    tier: 6,
+    category: "subtitle",
+    accepts: "video",
+    icon: Icons.Type,
+    favorite: true,
     params: [
-      { key: "fontSize", type: "integer", label: "Font Size", default: 24, min: 8, max: 120 },
-      { key: "color", type: "string", label: "Font Color", default: "#FFFFFF" },
-      { key: "outline", type: "integer", label: "Outline", default: 2, min: 0, max: 8 },
+      {
+        key: "fontSize",
+        type: "integer",
+        label: "Font Size",
+        default: 24,
+        min: 8,
+        max: 120,
+      },
+      {
+        key: "color",
+        type: "string",
+        label: "Font Color",
+        default: "#FFFFFF",
+      },
+      {
+        key: "outline",
+        type: "integer",
+        label: "Outline",
+        default: 2,
+        min: 0,
+        max: 8,
+      },
     ],
   },
   {
     id: "subtitle-extract",
     name: "Extract Subtitles",
     description: "Pull embedded subtitle streams out into separate files.",
-    tier: 6, category: "subtitle", accepts: "both",
+    tier: 6,
+    category: "subtitle",
+    accepts: "both",
     icon: Icons.Type,
     params: [
       {
-        key: "format", type: "enum", label: "Output Format", default: "srt",
+        key: "format",
+        type: "enum",
+        label: "Output Format",
+        default: "srt",
         options: [
           { value: "srt", label: "SRT" },
           { value: "ass", label: "ASS" },
@@ -750,12 +1345,18 @@ const OPERATIONS: Operation[] = [
   {
     id: "bitstream-filter",
     name: "Bitstream Filter",
-    description: "Apply a bitstream-level transform for container compatibility.",
-    tier: 6, category: "container", accepts: "both",
+    description:
+      "Apply a bitstream-level transform for container compatibility.",
+    tier: 6,
+    category: "container",
+    accepts: "both",
     icon: Icons.Terminal,
     params: [
       {
-        key: "filter", type: "enum", label: "Filter", default: "h264_mp4toannexb",
+        key: "filter",
+        type: "enum",
+        label: "Filter",
+        default: "h264_mp4toannexb",
         options: [
           { value: "h264_mp4toannexb", label: "h264_mp4toannexb" },
           { value: "hevc_mp4toannexb", label: "hevc_mp4toannexb" },
@@ -770,29 +1371,50 @@ const OPERATIONS: Operation[] = [
    HELPERS
    ══════════════════════════════════════════════════════════════════════════ */
 
-function evalCondition(cond: Condition | undefined, values: FormValues): boolean {
+function evalCondition(
+  cond: Condition | undefined,
+  values: FormValues
+): boolean {
   if (!cond) return true;
   const v = values[cond.param];
   switch (cond.operator) {
-    case "eq": return v === cond.value;
-    case "neq": return v !== cond.value;
-    case "truthy": return Boolean(v);
-    case "falsy": return !v;
-    default: return true;
+    case "eq":
+      return v === cond.value;
+    case "neq":
+      return v !== cond.value;
+    case "truthy":
+      return Boolean(v);
+    case "falsy":
+      return !v;
+    default:
+      return true;
   }
 }
 
 function defaultValues(op: Operation): FormValues {
   const out: FormValues = {};
   for (const p of op.params) {
-    if (p.default !== undefined) { out[p.key] = p.default; continue; }
+    if (p.default !== undefined) {
+      out[p.key] = p.default;
+      continue;
+    }
     switch (p.type) {
       case "number":
-      case "integer": out[p.key] = p.min ?? 0; break;
-      case "boolean": out[p.key] = false; break;
-      case "enum": out[p.key] = p.options?.[0]?.value ?? ""; break;
-      case "multiselect": out[p.key] = []; break;
-      default: out[p.key] = ""; break;
+      case "integer":
+        out[p.key] = p.min ?? 0;
+        break;
+      case "boolean":
+        out[p.key] = false;
+        break;
+      case "enum":
+        out[p.key] = p.options?.[0]?.value ?? "";
+        break;
+      case "multiselect":
+        out[p.key] = [];
+        break;
+      default:
+        out[p.key] = "";
+        break;
     }
   }
   return out;
@@ -806,11 +1428,29 @@ function acceptsSource(op: Operation, kind: AssetKind): boolean {
 }
 
 function formatBytes(bytes?: number): string {
-  if (bytes === undefined) return "-";
-  const units = ["B", "KB", "MB", "GB"];
-  let n = bytes, i = 0;
-  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
-  return n.toFixed(1) + " " + units[i];
+  if (bytes === undefined || bytes === null || Number.isNaN(bytes)) return "–";
+  if (bytes < 0) return "–";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let n = bytes;
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${n.toFixed(1)} ${units[i]}`;
+}
+
+function makeUid(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    try {
+      return crypto.randomUUID();
+    } catch {
+      /* fall through */
+    }
+  }
+  return `step_${Date.now().toString(36)}_${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -859,14 +1499,18 @@ const API = {
       body: JSON.stringify({ inputs, operations }),
     });
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || "Failed to start job");
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Failed to start job");
+    }
     return data.jobId as string;
   },
 
   async job(jobId: string): Promise<JobProgress> {
-    const res = await fetch("/api/ffmpeg/job/" + jobId);
+    const res = await fetch(`/api/ffmpeg/job/${jobId}`);
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || "Failed to fetch job");
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || "Failed to fetch job");
+    }
     return data.job as JobProgress;
   },
 };
@@ -878,15 +1522,12 @@ const API = {
 function useAsync<T>() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<T | null>(null);
 
   const run = useCallback(async (fn: () => Promise<T>): Promise<T | null> => {
     setLoading(true);
     setError(null);
     try {
-      const result = await fn();
-      setData(result);
-      return result;
+      return await fn();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
       return null;
@@ -895,25 +1536,22 @@ function useAsync<T>() {
     }
   }, []);
 
-  const reset = useCallback(() => {
-    setLoading(false);
-    setError(null);
-    setData(null);
-  }, []);
-
-  return { loading, error, data, run, reset, setData };
+  return { loading, error, run };
 }
 
-function useJobPoll(jobId: string | null): {
-  job: JobProgress | null;
-  error: string | null;
-} {
+function useJobPoll(
+  jobId: string | null
+): { job: JobProgress | null; error: string | null } {
   const [job, setJob] = useState<JobProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!jobId) { setJob(null); setError(null); return; }
+    if (!jobId) {
+      setJob(null);
+      setError(null);
+      return;
+    }
     let cancelled = false;
 
     const tick = async () => {
@@ -922,6 +1560,7 @@ function useJobPoll(jobId: string | null): {
         if (cancelled) return;
         setJob(j);
         if (j.status === "completed" || j.status === "failed") return;
+        if (timer.current) clearTimeout(timer.current);
         timer.current = setTimeout(tick, 1000);
       } catch (e) {
         if (cancelled) return;
@@ -932,7 +1571,10 @@ function useJobPoll(jobId: string | null): {
     tick();
     return () => {
       cancelled = true;
-      if (timer.current) clearTimeout(timer.current);
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
+      }
     };
   }, [jobId]);
 
@@ -944,7 +1586,11 @@ function useJobPoll(jobId: string | null): {
    ══════════════════════════════════════════════════════════════════════════ */
 
 function Sheet({
-  title, badge, note, onClose, children,
+  title,
+  badge,
+  note,
+  onClose,
+  children,
 }: {
   title: string;
   badge?: string;
@@ -953,15 +1599,26 @@ function Sheet({
   children: ReactNode;
 }) {
   return (
-    <div className="sheetOverlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+    <div className="sheetOverlay" onClick={onClose} role="presentation">
+      <div
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="sheetHandle" />
         <div className="sheetHead">
           <div className="sheetHeadLeft">
             <span className="sheetTitle">{title}</span>
             {badge && <span className="sheetBadge">{badge}</span>}
           </div>
-          <button className="closebtn" onClick={onClose} aria-label="Close">
+          <button
+            className="closebtn"
+            onClick={onClose}
+            aria-label="Close"
+            type="button"
+          >
             <Icons.Close />
           </button>
         </div>
@@ -973,7 +1630,9 @@ function Sheet({
 }
 
 function Field({
-  param, value, onChange,
+  param,
+  value,
+  onChange,
 }: {
   param: Param;
   value: unknown;
@@ -983,7 +1642,9 @@ function Field({
     case "string":
       return (
         <label className="field">
-          <div className="fieldHead"><span className="fieldLabel">{param.label}</span></div>
+          <span className="fieldHead">
+            <span className="fieldLabel">{param.label}</span>
+          </span>
           <input
             type="text"
             placeholder={param.placeholder}
@@ -998,12 +1659,13 @@ function Field({
     case "integer":
       return (
         <label className="field">
-          <div className="fieldHead">
+          <span className="fieldHead">
             <span className="fieldLabel">{param.label}</span>
             <span className="fieldValue">
-              {String(value ?? 0)}{param.unit ? " " + param.unit : ""}
+              {String(value ?? 0)}
+              {param.unit ? ` ${param.unit}` : ""}
             </span>
-          </div>
+          </span>
           <input
             type="number"
             min={param.min}
@@ -1031,10 +1693,17 @@ function Field({
     case "enum":
       return (
         <label className="field">
-          <div className="fieldHead"><span className="fieldLabel">{param.label}</span></div>
-          <select value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)}>
+          <span className="fieldHead">
+            <span className="fieldLabel">{param.label}</span>
+          </span>
+          <select
+            value={(value as string) ?? ""}
+            onChange={(e) => onChange(e.target.value)}
+          >
             {param.options?.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
             ))}
           </select>
           {param.helpText && <p className="fieldHelp">{param.helpText}</p>}
@@ -1045,12 +1714,17 @@ function Field({
       const arr = (value as string[]) ?? [];
       return (
         <div className="field">
-          <div className="fieldHead"><span className="fieldLabel">{param.label}</span></div>
+          <span className="fieldHead">
+            <span className="fieldLabel">{param.label}</span>
+          </span>
           <div className="multiGrid">
             {param.options?.map((o) => {
               const on = arr.includes(o.value);
               return (
-                <label key={o.value} className={"multiChip " + (on ? "multiOn" : "")}>
+                <label
+                  key={o.value}
+                  className={"multiChip" + (on ? " multiOn" : "")}
+                >
                   <input
                     type="checkbox"
                     checked={on}
@@ -1073,7 +1747,9 @@ function Field({
     case "textarea":
       return (
         <label className="field">
-          <div className="fieldHead"><span className="fieldLabel">{param.label}</span></div>
+          <span className="fieldHead">
+            <span className="fieldLabel">{param.label}</span>
+          </span>
           <textarea
             rows={3}
             value={(value as string) ?? ""}
@@ -1089,7 +1765,9 @@ function Field({
 }
 
 function OperationCard({
-  op, onOpen, disabled,
+  op,
+  onOpen,
+  disabled,
 }: {
   op: Operation;
   onOpen: () => void;
@@ -1097,8 +1775,15 @@ function OperationCard({
 }) {
   const Icon = op.icon;
   return (
-    <button className="opCard" onClick={onOpen} disabled={disabled}>
-      <span className="opIcon"><Icon /></span>
+    <button
+      type="button"
+      className="opCard"
+      onClick={onOpen}
+      disabled={disabled}
+    >
+      <span className="opIcon">
+        <Icon />
+      </span>
       <span className="opBody">
         <span className="opName">
           {op.name}
@@ -1115,7 +1800,11 @@ function OperationCard({
 }
 
 function NavButton({
-  active, label, icon, onClick, badge,
+  active,
+  label,
+  icon,
+  onClick,
+  badge,
 }: {
   active: boolean;
   label: string;
@@ -1124,10 +1813,16 @@ function NavButton({
   badge?: number;
 }) {
   return (
-    <button className={"navBtn " + (active ? "navActive" : "")} onClick={onClick}>
+    <button
+      type="button"
+      className={"navBtn" + (active ? " navActive" : "")}
+      onClick={onClick}
+    >
       <span className="navIcon">
         {icon}
-        {badge !== undefined && badge > 0 && <span className="navBadge">{badge}</span>}
+        {badge !== undefined && badge > 0 && (
+          <span className="navBadge">{badge}</span>
+        )}
       </span>
       <span className="navLabel">{label}</span>
     </button>
@@ -1153,6 +1848,719 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   HEADER HELPERS
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const HEADER_TITLES: Record<View, string> = {
+  home: "Media Studio",
+  catalog: "Operations",
+  pipeline: "Pipeline",
+  run: "Working",
+  result: "Done",
+};
+
+function headerSub(
+  v: View,
+  pipeline: PipelineStep[],
+  asset: Asset | null,
+  job: JobProgress | null
+): string {
+  switch (v) {
+    case "home":
+      return asset ? asset.name : "no source loaded";
+    case "catalog":
+      return `${pipeline.length} in pipeline`;
+    case "pipeline":
+      return pipeline.length ? `${pipeline.length} steps` : "empty";
+    case "run":
+      return job
+        ? `${job.status} · ${Math.round(job.percent)}%`
+        : "starting…";
+    case "result":
+      return job?.status === "completed" ? "output ready" : "finished";
+    default:
+      return "";
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   VIEWS
+   ══════════════════════════════════════════════════════════════════════════ */
+
+function HomeView({
+  asset,
+  uploadPercent,
+  onPickFile,
+  onDrop,
+  onRemoveAsset,
+  onOpenOp,
+  onBrowse,
+  onOpenPipeline,
+  onOpenAsset,
+  favorites,
+}: {
+  asset: Asset | null;
+  uploadPercent: number | null;
+  onPickFile: () => void;
+  onDrop: (e: DragEvent<HTMLElement>) => void;
+  onRemoveAsset: () => void;
+  onOpenOp: (op: Operation) => void;
+  onBrowse: () => void;
+  onOpenPipeline: () => void;
+  onOpenAsset: () => void;
+  favorites: Operation[];
+}) {
+  const quickPicks: {
+    id: string;
+    label: string;
+    icon: ComponentType<IconProps>;
+  }[] = [
+    { id: "convert", label: "Convert", icon: Icons.Archive },
+    { id: "trim", label: "Trim", icon: Icons.Scissors },
+    { id: "scale", label: "Scale", icon: Icons.Settings },
+    { id: "youtube-preset", label: "YouTube", icon: Icons.Bolt },
+  ];
+
+  const isUploading = uploadPercent !== null && uploadPercent < 100;
+
+  return (
+    <div className="pad">
+      {!asset ? (
+        <section
+          className={"card dropCard" + (isUploading ? " dropCardBusy" : "")}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={isUploading ? undefined : onDrop}
+          onClick={isUploading ? undefined : onPickFile}
+          role={isUploading ? undefined : "button"}
+          tabIndex={isUploading ? undefined : 0}
+          onKeyDown={(e) => {
+            if (isUploading) return;
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onPickFile();
+            }
+          }}
+        >
+          {isUploading ? (
+            <>
+              <div className="dropIcon">
+                <Icons.Upload />
+              </div>
+              <div className="dropTitle">Uploading…</div>
+              <div className="dropProgress">
+                <div
+                  className="dropProgressBar"
+                  style={{ width: `${uploadPercent}%` }}
+                />
+              </div>
+              <span className="dropHint">{uploadPercent}%</span>
+            </>
+          ) : (
+            <>
+              <div className="dropIcon">
+                <Icons.Upload />
+              </div>
+              <div className="dropTitle">Add a media file</div>
+              <span className="dropHint">
+                Drop a video, audio, or image here, or tap to browse.
+              </span>
+            </>
+          )}
+        </section>
+      ) : (
+        <section
+          className="card assetCard"
+          onClick={onOpenAsset}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onOpenAsset();
+            }
+          }}
+        >
+          <div className="assetIcon">
+            {asset.kind === "audio" ? (
+              <Icons.Music />
+            ) : asset.kind === "image" ? (
+              <Icons.Image />
+            ) : (
+              <Icons.Video />
+            )}
+          </div>
+          <div className="assetMeta">
+            <span className="assetLabel">Source</span>
+            <span className="assetName">{asset.name}</span>
+            <span className="assetInfo">
+              {formatBytes(asset.sizeBytes)}
+              {asset.duration ? ` · ${asset.duration}` : ""}
+              {` · ${asset.kind}`}
+            </span>
+          </div>
+          <div className="assetActions">
+            <button
+              className="miniBtn"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPickFile();
+              }}
+            >
+              Replace
+            </button>
+            <button
+              className="miniBtn miniBtnDanger"
+              type="button"
+              aria-label="Remove"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemoveAsset();
+              }}
+            >
+              <Icons.Trash />
+            </button>
+          </div>
+        </section>
+      )}
+
+      {asset && (
+        <section>
+          <div className="rowHead">
+            <h3 className="sectionTitle">Quick Actions</h3>
+          </div>
+          <div className="quickGrid">
+            {quickPicks.map((qp) => {
+              const op = OPERATIONS.find((o) => o.id === qp.id);
+              if (!op || !acceptsSource(op, asset.kind)) return null;
+              const Icon = qp.icon;
+              return (
+                <button
+                  key={qp.id}
+                  type="button"
+                  className="quickCard"
+                  onClick={() => onOpenOp(op)}
+                >
+                  <Icon />
+                  <span>{qp.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {asset && favorites.length > 0 && (
+        <section>
+          <div className="rowHead">
+            <h3 className="sectionTitle">Favorites</h3>
+            <button type="button" className="rowAction" onClick={onBrowse}>
+              See all
+            </button>
+          </div>
+          <div className="favScroll">
+            {favorites.map((op) => {
+              const Icon = op.icon;
+              return (
+                <button
+                  key={op.id}
+                  type="button"
+                  className="favCard"
+                  onClick={() => onOpenOp(op)}
+                >
+                  <span className="favIcon">
+                    <Icon size={16} />
+                  </span>
+                  <span className="favName">{op.name}</span>
+                  <span className="favTier">Tier {op.tier}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      <section>
+        <div className="rowHead">
+          <h3 className="sectionTitle">Pipeline</h3>
+          <button type="button" className="rowAction" onClick={onOpenPipeline}>
+            Open
+          </button>
+        </div>
+        <button
+          type="button"
+          className="card pipelinePreview"
+          onClick={onOpenPipeline}
+        >
+          <Icons.Flow />
+          <div className="pipelinePreviewText">
+            <span className="pipelinePreviewTitle">Chain operations</span>
+            <span className="pipelinePreviewSub">
+              Queue multiple steps and run them in sequence
+            </span>
+          </div>
+          <Icons.Chevron />
+        </button>
+      </section>
+    </div>
+  );
+}
+
+function CatalogView({
+  grouped,
+  search,
+  setSearch,
+  tierFilter,
+  setTierFilter,
+  onOpenOp,
+}: {
+  grouped: [number, Operation[]][];
+  search: string;
+  setSearch: (s: string) => void;
+  tierFilter: TierFilter;
+  setTierFilter: (t: TierFilter) => void;
+  onOpenOp: (op: Operation) => void;
+}) {
+  return (
+    <div className="pad">
+      <div className="searchWrap">
+        <Icons.Search />
+        <input
+          className="searchInput"
+          placeholder="Search operations…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+      <div className="filterScroll">
+        {TIER_FILTERS.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            className={
+              "filterChip" + (tierFilter === f.id ? " filterActive" : "")
+            }
+            onClick={() => setTierFilter(f.id)}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {grouped.length === 0 && (
+        <Empty
+          title="No operations match"
+          hint="Try a different filter or search term."
+        />
+      )}
+
+      <div className="catalog">
+        {grouped.map(([tier, ops]) => (
+          <section key={tier} className="tierSection">
+            <h3 className="tierHead">{TIERS[tier] ?? `Tier ${tier}`}</h3>
+            <ul className="opList">
+              {ops.map((op) => (
+                <li key={op.id}>
+                  <OperationCard op={op} onOpen={() => onOpenOp(op)} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PipelineView({
+  asset,
+  pipeline,
+  onAdd,
+  onRemove,
+  onMove,
+  onRun,
+  running,
+  error,
+  onEdit,
+}: {
+  asset: Asset | null;
+  pipeline: PipelineStep[];
+  onAdd: () => void;
+  onRemove: (uid: string) => void;
+  onMove: (i: number, d: -1 | 1) => void;
+  onRun: () => void;
+  running: boolean;
+  error: string | null;
+  onEdit: (step: PipelineStep) => void;
+}) {
+  return (
+    <div className="pad">
+      <section className="flowWrap">
+        <div className="flowNode">
+          <div className="flowNodeIcon">
+            {asset?.kind === "audio" ? (
+              <Icons.Music />
+            ) : asset?.kind === "image" ? (
+              <Icons.Image />
+            ) : (
+              <Icons.File />
+            )}
+          </div>
+          <div className="flowNodeBody">
+            <span className="flowNodeLabel">Source</span>
+            <span className="flowNodeValue">
+              {asset?.name ?? "No file loaded"}
+            </span>
+          </div>
+        </div>
+
+        {pipeline.length === 0 && (
+          <div className="flowEmpty">
+            <Icons.Flow size={26} />
+            <p>No steps yet</p>
+            <span>Add operations to build your pipeline.</span>
+          </div>
+        )}
+
+        {pipeline.map((step, i) => {
+          const Icon = step.op.icon;
+          return (
+            <div key={step.uid} className="flowRow">
+              <div className="flowLine" />
+              <div className="flowNode">
+                <div className="flowReorder">
+                  <button
+                    type="button"
+                    onClick={() => onMove(i, -1)}
+                    disabled={i === 0}
+                    aria-label="Move up"
+                  >
+                    <Icons.Up />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onMove(i, 1)}
+                    disabled={i === pipeline.length - 1}
+                    aria-label="Move down"
+                  >
+                    <Icons.Down />
+                  </button>
+                </div>
+                <div className="flowNodeIcon flowNodeIconOp">
+                  <Icon size={18} />
+                </div>
+                <button
+                  type="button"
+                  className="flowNodeBody flowNodeBodyBtn"
+                  onClick={() => onEdit(step)}
+                >
+                  <span className="flowNodeLabel">Step {i + 1}</span>
+                  <span className="flowNodeValue">{step.op.name}</span>
+                </button>
+                <button
+                  type="button"
+                  className="flowDelete"
+                  onClick={() => onRemove(step.uid)}
+                  aria-label="Remove"
+                >
+                  <Icons.Trash />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        <div className="flowRow">
+          <div className="flowLine" />
+          <button type="button" className="flowAdd" onClick={onAdd}>
+            <Icons.Plus /> Add Operation
+          </button>
+        </div>
+      </section>
+
+      {pipeline.length > 0 && (
+        <section className="card statsCard">
+          <Stat label="Steps" value={String(pipeline.length)} />
+          <Stat label="Source" value={asset?.kind ?? "–"} />
+          <Stat
+            label="Input"
+            value={asset ? formatBytes(asset.sizeBytes) : "–"}
+          />
+        </section>
+      )}
+
+      {error && (
+        <div className="errorBox">
+          <Icons.Warn /> {error}
+        </div>
+      )}
+
+      <button
+        type="button"
+        className="primaryBtn"
+        onClick={onRun}
+        disabled={!asset || pipeline.length === 0 || running}
+      >
+        {running ? "Starting…" : "Start"}
+      </button>
+    </div>
+  );
+}
+
+function RunView({
+  asset,
+  pipeline,
+  job,
+  error,
+}: {
+  asset: Asset | null;
+  pipeline: PipelineStep[];
+  job: JobProgress | null;
+  error: string | null;
+}) {
+  const percent = job?.percent ?? 0;
+  const activeIndex =
+    job?.stepIndex ??
+    Math.min(
+      Math.floor((percent / 100) * Math.max(pipeline.length, 1)),
+      Math.max(pipeline.length - 1, 0)
+    );
+  const circumference = 2 * Math.PI * 52;
+
+  return (
+    <div className="pad">
+      <section className="card runHeader">
+        <div className="runRingWrap">
+          <svg viewBox="0 0 120 120" className="runRing">
+            <circle
+              cx="60"
+              cy="60"
+              r="52"
+              fill="none"
+              stroke="var(--border)"
+              strokeWidth="6"
+            />
+            <circle
+              cx="60"
+              cy="60"
+              r="52"
+              fill="none"
+              stroke="var(--accent)"
+              strokeWidth="6"
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={circumference * (1 - percent / 100)}
+              transform="rotate(-90 60 60)"
+            />
+          </svg>
+          <div className="runRingText">
+            <span className="runPct">{Math.round(percent)}%</span>
+            <span className="runState">{job?.status ?? "queued"}</span>
+          </div>
+        </div>
+        <div className="runMeta">
+          <span className="runSource">{asset?.name ?? "…"}</span>
+          <span className="runStep">
+            {job?.step ?? `Step ${activeIndex + 1} of ${pipeline.length}`}
+          </span>
+        </div>
+      </section>
+
+      {error && (
+        <div className="errorBox">
+          <Icons.Warn /> {error}
+        </div>
+      )}
+
+      {job?.error && (
+        <div className="errorBox">
+          <Icons.Warn /> {job.error}
+        </div>
+      )}
+
+      <section className="card logCard">
+        <div className="logHead">
+          <Icons.Terminal /> <span>Live Output</span>
+        </div>
+        <pre className="logBody">{job?.log || "Waiting for output…"}</pre>
+      </section>
+
+      <section className="stepList">
+        {pipeline.map((step, i) => (
+          <div
+            key={step.uid}
+            className={
+              "stepRow " +
+              (i < activeIndex
+                ? "stepDone"
+                : i === activeIndex
+                ? "stepActive"
+                : "")
+            }
+          >
+            <div className="stepDot">
+              {i < activeIndex ? (
+                <Icons.Check size={12} />
+              ) : i === activeIndex ? (
+                <Icons.Bolt size={12} />
+              ) : (
+                <span>{i + 1}</span>
+              )}
+            </div>
+            <span className="stepName">{step.op.name}</span>
+            {i === activeIndex && job?.status === "running" && (
+              <span className="stepPct">{Math.round(percent)}%</span>
+            )}
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function ResultView({
+  asset,
+  job,
+  onAgain,
+  onHome,
+}: {
+  asset: Asset | null;
+  job: JobProgress | null;
+  onAgain: () => void;
+  onHome: () => void;
+}) {
+  const ok = job?.status === "completed";
+  const primary = job?.outputs?.[0];
+
+  return (
+    <div className="pad">
+      <section className="card resultHero">
+        <div className={"resultIcon" + (ok ? "" : " resultIconFail")}>
+          {ok ? <Icons.Check size={28} /> : <Icons.Warn size={28} />}
+        </div>
+        <h2 className="resultTitle">
+          {ok ? "Processing complete" : "Processing failed"}
+        </h2>
+        <p className="resultSub">{job?.error || asset?.name || ""}</p>
+      </section>
+
+      {primary && (
+        <section className="card videoPreview">
+          <div className="videoThumb">
+            <Icons.Play size={28} />
+          </div>
+          <div className="videoMeta">
+            <span className="videoName">{primary.name}</span>
+            <span className="videoInfo">{formatBytes(primary.sizeBytes)}</span>
+          </div>
+        </section>
+      )}
+
+      {job?.outputs && job.outputs.length > 0 && (
+        <section>
+          <div className="rowHead">
+            <h3 className="sectionTitle">All outputs</h3>
+          </div>
+          <ul className="outputList">
+            {job.outputs.map((o) => (
+              <li key={o.name}>
+                <a className="outputRow" href={o.url} download>
+                  <Icons.Download size={16} />
+                  <span className="outputName">{o.name}</span>
+                  <span className="outputSize">
+                    {formatBytes(o.sizeBytes)}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <div className="resultActions">
+        <button type="button" className="primaryBtn" onClick={onHome}>
+          Back to Home
+        </button>
+        <button type="button" className="ghostBtnWide" onClick={onAgain}>
+          Start Another
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SHEETS
+   ══════════════════════════════════════════════════════════════════════════ */
+
+function ConfigureSheet({
+  op,
+  values,
+  setValue,
+  onClose,
+  onAdd,
+}: {
+  op: Operation;
+  values: FormValues;
+  setValue: (k: string, v: unknown) => void;
+  onClose: () => void;
+  onAdd: () => void;
+}) {
+  const visible = useMemo(
+    () => op.params.filter((p) => evalCondition(p.showIf, values)),
+    [op.params, values]
+  );
+
+  const groups = useMemo(() => {
+    const m = new Map<string, Param[]>();
+    for (const p of visible) {
+      const g = p.group ?? "Options";
+      if (!m.has(g)) m.set(g, []);
+      m.get(g)!.push(p);
+    }
+    return Array.from(m.entries());
+  }, [visible]);
+
+  return (
+    <Sheet
+      title={op.name}
+      badge={`tier ${op.tier} · ${op.category}`}
+      note={op.description}
+      onClose={onClose}
+    >
+      {op.chainSteps && (
+        <div className="chainNote">
+          <Icons.Flow size={14} />
+          <span>Chain: {op.chainSteps.join(" → ")}</span>
+        </div>
+      )}
+
+      {groups.length === 0 && (
+        <p className="fieldHelp">No options needed. Ready to add.</p>
+      )}
+
+      {groups.map(([group, params]) => (
+        <div key={group} className="fieldGroup">
+          <div className="groupLabel">{group}</div>
+          {params.map((p) => (
+            <Field
+              key={p.key}
+              param={p}
+              value={values[p.key]}
+              onChange={(v) => setValue(p.key, v)}
+            />
+          ))}
+        </div>
+      ))}
+
+      <button type="button" className="primaryBtn" onClick={onAdd}>
+        <Icons.Plus /> Add to Pipeline
+      </button>
+    </Sheet>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    MAIN PAGE
    ══════════════════════════════════════════════════════════════════════════ */
 
@@ -1170,14 +2578,15 @@ export default function FfmpegPage() {
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
 
   const [jobId, setJobId] = useState<string | null>(null);
+  const pollingActive = view === "run" || view === "result";
   const { job, error: pollError } = useJobPoll(
-    view === "run" || view === "result" ? jobId : null
+    pollingActive ? jobId : null
   );
 
   const runJob = useAsync<string>();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  /* ── Derived ─────────────────────────────────────────────────────────── */
+  /* ── Derived ───────────────────────────────────────────────────────── */
   const visibleOps = useMemo(() => {
     const ranges: Record<TierFilter, [number, number]> = {
       all: [1, 6],
@@ -1194,7 +2603,9 @@ export default function FfmpegPage() {
       if (op.tier < lo || op.tier > hi) return false;
       if (asset && !acceptsSource(op, asset.kind)) return false;
       if (!q) return true;
-      return (op.name + op.description + op.category).toLowerCase().includes(q);
+      return (op.name + op.description + op.category)
+        .toLowerCase()
+        .includes(q);
     });
   }, [tierFilter, search, asset]);
 
@@ -1215,16 +2626,17 @@ export default function FfmpegPage() {
     [asset]
   );
 
-  /* ── Handlers ────────────────────────────────────────────────────────── */
+  /* ── Handlers ──────────────────────────────────────────────────────── */
   const handleFile = useCallback(async (file: File) => {
     setUploadPercent(0);
     try {
       const uploaded = await API.upload(file, (p) => setUploadPercent(p));
       setAsset(uploaded);
-      setUploadPercent(null);
+      setPipeline([]); // new source, drop stale steps
     } catch (err) {
-      setUploadPercent(null);
       alert(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploadPercent(null);
     }
   }, []);
 
@@ -1238,7 +2650,7 @@ export default function FfmpegPage() {
   );
 
   const onDrop = useCallback(
-    (e: DragEvent<HTMLDivElement>) => {
+    (e: DragEvent<HTMLElement>) => {
       e.preventDefault();
       const f = e.dataTransfer.files?.[0];
       if (f) handleFile(f);
@@ -1256,7 +2668,7 @@ export default function FfmpegPage() {
     if (!selectedOp) return;
     setPipeline((p) => [
       ...p,
-      { uid: crypto.randomUUID(), op: selectedOp, values },
+      { uid: makeUid(), op: selectedOp, values },
     ]);
     setSheet(null);
     setSelectedOp(null);
@@ -1271,9 +2683,7 @@ export default function FfmpegPage() {
       const next = [...p];
       const t = index + dir;
       if (t < 0 || t >= next.length) return p;
-      const tmp = next[index];
-      next[index] = next[t];
-      next[t] = tmp;
+      [next[index], next[t]] = [next[t], next[index]];
       return next;
     });
   }
@@ -1299,7 +2709,7 @@ export default function FfmpegPage() {
     setView("home");
   }
 
-  /* ── Auto-advance on completion ──────────────────────────────────────── */
+  /* ── Auto-advance on completion ────────────────────────────────────── */
   useEffect(() => {
     if (view === "run" && job?.status === "completed") {
       const t = setTimeout(() => setView("result"), 500);
@@ -1307,19 +2717,25 @@ export default function FfmpegPage() {
     }
   }, [view, job]);
 
-  /* ── Render ──────────────────────────────────────────────────────────── */
+  /* ── Render ────────────────────────────────────────────────────────── */
+  const headerPrimaryAction = useCallback(() => {
+    // Only navigate; never destroy state via the header button.
+    if (view !== "home") setView("home");
+  }, [view]);
+
   return (
     <div className="app">
       <header className="topbar">
         <button
           className="iconbtn"
-          onClick={() => (view === "home" ? resetAll() : setView("home"))}
-          aria-label="Back"
+          onClick={headerPrimaryAction}
+          aria-label={view === "home" ? "Home" : "Back"}
+          type="button"
         >
           {view === "home" ? <Icons.Bolt /> : <Icons.Back />}
         </button>
         <div className="title">
-          <span className="titleMain">{headerTitle(view)}</span>
+          <span className="titleMain">{HEADER_TITLES[view]}</span>
           <span className="titleSub">
             {headerSub(view, pipeline, asset, job)}
           </span>
@@ -1333,7 +2749,10 @@ export default function FfmpegPage() {
             uploadPercent={uploadPercent}
             onPickFile={() => fileInputRef.current?.click()}
             onDrop={onDrop}
-            onRemoveAsset={() => setAsset(null)}
+            onRemoveAsset={() => {
+              setAsset(null);
+              setPipeline([]);
+            }}
             onOpenOp={openConfigure}
             onBrowse={() => setView("catalog")}
             onOpenPipeline={() => setView("pipeline")}
@@ -1372,7 +2791,12 @@ export default function FfmpegPage() {
         )}
 
         {view === "run" && (
-          <RunView asset={asset} pipeline={pipeline} job={job} error={pollError} />
+          <RunView
+            asset={asset}
+            pipeline={pipeline}
+            job={job}
+            error={pollError}
+          />
         )}
 
         {view === "result" && (
@@ -1423,7 +2847,10 @@ export default function FfmpegPage() {
           op={selectedOp}
           values={values}
           setValue={(k, v) => setValues((prev) => ({ ...prev, [k]: v }))}
-          onClose={() => { setSheet(null); setSelectedOp(null); }}
+          onClose={() => {
+            setSheet(null);
+            setSelectedOp(null);
+          }}
           onAdd={addToPipeline}
         />
       )}
@@ -1468,635 +2895,6 @@ export default function FfmpegPage() {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   HEADER HELPERS
-   ══════════════════════════════════════════════════════════════════════════ */
-
-function headerTitle(v: View): string {
-  const map: Record<View, string> = {
-    home: "Media Studio",
-    catalog: "Operations",
-    pipeline: "Pipeline",
-    run: "Working",
-    result: "Done",
-  };
-  return map[v];
-}
-
-function headerSub(
-  v: View,
-  pipeline: PipelineStep[],
-  asset: Asset | null,
-  job: JobProgress | null
-): string {
-  if (v === "home") return asset ? asset.name : "no source loaded";
-  if (v === "catalog") return String(pipeline.length) + " in pipeline";
-  if (v === "pipeline")
-    return pipeline.length ? String(pipeline.length) + " steps" : "empty";
-  if (v === "run")
-    return job
-      ? job.status + " · " + String(Math.round(job.percent)) + "%"
-      : "starting...";
-  return "output ready";
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
-   VIEWS
-   ══════════════════════════════════════════════════════════════════════════ */
-
-function HomeView({
-  asset, uploadPercent, onPickFile, onDrop, onRemoveAsset,
-  onOpenOp, onBrowse, onOpenPipeline, onOpenAsset, favorites,
-}: {
-  asset: Asset | null;
-  uploadPercent: number | null;
-  onPickFile: () => void;
-  onDrop: (e: DragEvent<HTMLDivElement>) => void;
-  onRemoveAsset: () => void;
-  onOpenOp: (op: Operation) => void;
-  onBrowse: () => void;
-  onOpenPipeline: () => void;
-  onOpenAsset: () => void;
-  favorites: Operation[];
-}) {
-  const quickPicks: { id: string; label: string; icon: ComponentType<IconProps> }[] = [
-    { id: "convert", label: "Convert", icon: Icons.Archive },
-    { id: "trim", label: "Trim", icon: Icons.Scissors },
-    { id: "scale", label: "Scale", icon: Icons.Settings },
-    { id: "youtube-preset", label: "YouTube", icon: Icons.Bolt },
-  ];
-
-  const isUploading = uploadPercent !== null && uploadPercent < 100;
-
-  return (
-    <div className="pad">
-      {!asset ? (
-        <section
-          className={"card dropCard " + (isUploading ? "dropCardBusy" : "")}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={isUploading ? undefined : onDrop}
-          onClick={isUploading ? undefined : onPickFile}
-        >
-          {isUploading ? (
-            <>
-              <div className="dropIcon"><Icons.Upload /></div>
-              <div className="dropTitle">Uploading...</div>
-              <div className="dropProgress">
-                <div
-                  className="dropProgressBar"
-                  style={{ width: String(uploadPercent) + "%" }}
-                />
-              </div>
-              <span className="dropHint">{uploadPercent}%</span>
-            </>
-          ) : (
-            <>
-              <div className="dropIcon"><Icons.Upload /></div>
-              <div className="dropTitle">Add a media file</div>
-              <span className="dropHint">
-                Drop a video, audio, or image here, or tap to browse.
-              </span>
-            </>
-          )}
-        </section>
-      ) : (
-        <section className="card assetCard" onClick={onOpenAsset}>
-          <div className="assetIcon">
-            {asset.kind === "audio" ? (
-              <Icons.Music />
-            ) : asset.kind === "image" ? (
-              <Icons.Image />
-            ) : (
-              <Icons.Video />
-            )}
-          </div>
-          <div className="assetMeta">
-            <span className="assetLabel">Source</span>
-            <span className="assetName">{asset.name}</span>
-            <span className="assetInfo">
-              {formatBytes(asset.sizeBytes)}
-              {asset.duration ? " · " + asset.duration : ""}
-              {" · "}
-              {asset.kind}
-            </span>
-          </div>
-          <div className="assetActions">
-            <button
-              className="miniBtn"
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPickFile();
-              }}
-            >
-              Replace
-            </button>
-            <button
-              className="miniBtn miniBtnDanger"
-              type="button"
-              aria-label="Remove"
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemoveAsset();
-              }}
-            >
-              <Icons.Trash />
-            </button>
-          </div>
-        </section>
-      )}
-
-      {asset && (
-        <section>
-          <div className="rowHead">
-            <h3 className="sectionTitle">Quick Actions</h3>
-          </div>
-          <div className="quickGrid">
-            {quickPicks.map((qp) => {
-              const op = OPERATIONS.find((o) => o.id === qp.id);
-              if (!op || !acceptsSource(op, asset.kind)) return null;
-              const Icon = qp.icon;
-              return (
-                <button
-                  key={qp.id}
-                  className="quickCard"
-                  onClick={() => onOpenOp(op)}
-                >
-                  <Icon />
-                  <span>{qp.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {asset && favorites.length > 0 && (
-        <section>
-          <div className="rowHead">
-            <h3 className="sectionTitle">Favorites</h3>
-            <button className="rowAction" onClick={onBrowse}>
-              See all
-            </button>
-          </div>
-          <div className="favScroll">
-            {favorites.map((op) => {
-              const Icon = op.icon;
-              return (
-                <button
-                  key={op.id}
-                  className="favCard"
-                  onClick={() => onOpenOp(op)}
-                >
-                  <span className="favIcon"><Icon size={16} /></span>
-                  <span className="favName">{op.name}</span>
-                  <span className="favTier">Tier {op.tier}</span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      <section>
-        <div className="rowHead">
-          <h3 className="sectionTitle">Pipeline</h3>
-          <button className="rowAction" onClick={onOpenPipeline}>
-            Open
-          </button>
-        </div>
-        <button className="card pipelinePreview" onClick={onOpenPipeline}>
-          <Icons.Flow />
-          <div className="pipelinePreviewText">
-            <span className="pipelinePreviewTitle">Chain operations</span>
-            <span className="pipelinePreviewSub">
-              Queue multiple steps and run them in sequence
-            </span>
-          </div>
-          <Icons.Chevron />
-        </button>
-      </section>
-    </div>
-  );
-}
-
-function CatalogView({
-  grouped, search, setSearch, tierFilter, setTierFilter, onOpenOp,
-}: {
-  grouped: [number, Operation[]][];
-  search: string;
-  setSearch: (s: string) => void;
-  tierFilter: TierFilter;
-  setTierFilter: (t: TierFilter) => void;
-  onOpenOp: (op: Operation) => void;
-}) {
-  return (
-    <div className="pad">
-      <div className="searchWrap">
-        <Icons.Search />
-        <input
-          className="searchInput"
-          placeholder="Search operations..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-      <div className="filterScroll">
-        {TIER_FILTERS.map((f) => (
-          <button
-            key={f.id}
-            className={"filterChip " + (tierFilter === f.id ? "filterActive" : "")}
-            onClick={() => setTierFilter(f.id)}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {grouped.length === 0 && (
-        <Empty
-          title="No operations match"
-          hint="Try a different filter or search term."
-        />
-      )}
-
-      <div className="catalog">
-        {grouped.map(([tier, ops]) => (
-          <section key={tier} className="tierSection">
-            <h3 className="tierHead">{TIERS[tier]}</h3>
-            <ul className="opList">
-              {ops.map((op) => (
-                <li key={op.id}>
-                  <OperationCard op={op} onOpen={() => onOpenOp(op)} />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PipelineView({
-  asset, pipeline, onAdd, onRemove, onMove, onRun, running, error, onEdit,
-}: {
-  asset: Asset | null;
-  pipeline: PipelineStep[];
-  onAdd: () => void;
-  onRemove: (uid: string) => void;
-  onMove: (i: number, d: -1 | 1) => void;
-  onRun: () => void;
-  running: boolean;
-  error: string | null;
-  onEdit: (step: PipelineStep) => void;
-}) {
-  return (
-    <div className="pad">
-      <section className="flowWrap">
-        <div className="flowNode">
-          <div className="flowNodeIcon">
-            {asset?.kind === "audio" ? (
-              <Icons.Music />
-            ) : asset?.kind === "image" ? (
-              <Icons.Image />
-            ) : (
-              <Icons.File />
-            )}
-          </div>
-          <div className="flowNodeBody">
-            <span className="flowNodeLabel">Source</span>
-            <span className="flowNodeValue">
-              {asset?.name ?? "No file loaded"}
-            </span>
-          </div>
-        </div>
-
-        {pipeline.length === 0 && (
-          <div className="flowEmpty">
-            <Icons.Flow size={26} />
-            <p>No steps yet</p>
-            <span>Add operations to build your pipeline.</span>
-          </div>
-        )}
-
-        {pipeline.map((step, i) => {
-          const Icon = step.op.icon;
-          return (
-            <div key={step.uid} className="flowRow">
-              <div className="flowLine" />
-              <div className="flowNode">
-                <div className="flowReorder">
-                  <button
-                    onClick={() => onMove(i, -1)}
-                    disabled={i === 0}
-                    aria-label="Move up"
-                  >
-                    <Icons.Up />
-                  </button>
-                  <button
-                    onClick={() => onMove(i, 1)}
-                    disabled={i === pipeline.length - 1}
-                    aria-label="Move down"
-                  >
-                    <Icons.Down />
-                  </button>
-                </div>
-                <div className="flowNodeIcon flowNodeIconOp">
-                  <Icon size={18} />
-                </div>
-                <div className="flowNodeBody" onClick={() => onEdit(step)}>
-                  <span className="flowNodeLabel">Step {i + 1}</span>
-                  <span className="flowNodeValue">{step.op.name}</span>
-                </div>
-                <button
-                  className="flowDelete"
-                  onClick={() => onRemove(step.uid)}
-                  aria-label="Remove"
-                >
-                  <Icons.Trash />
-                </button>
-              </div>
-            </div>
-          );
-        })}
-
-        <div className="flowRow">
-          <div className="flowLine" />
-          <button className="flowAdd" onClick={onAdd}>
-            <Icons.Plus /> Add Operation
-          </button>
-        </div>
-      </section>
-
-      {pipeline.length > 0 && (
-        <section className="card statsCard">
-          <Stat label="Steps" value={String(pipeline.length)} />
-          <Stat label="Source" value={asset?.kind ?? "-"} />
-          <Stat
-            label="Input"
-            value={asset ? formatBytes(asset.sizeBytes) : "-"}
-          />
-        </section>
-      )}
-
-      {error && (
-        <div className="errorBox">
-          <Icons.Warn /> {error}
-        </div>
-      )}
-
-      <button
-        className="primaryBtn"
-        onClick={onRun}
-        disabled={!asset || !pipeline.length || running}
-      >
-        {running ? "Starting..." : "Start"}
-      </button>
-    </div>
-  );
-}
-
-function RunView({
-  asset, pipeline, job, error,
-}: {
-  asset: Asset | null;
-  pipeline: PipelineStep[];
-  job: JobProgress | null;
-  error: string | null;
-}) {
-  const percent = job?.percent ?? 0;
-  const activeIndex =
-    job?.stepIndex ??
-    Math.min(
-      Math.floor((percent / 100) * Math.max(pipeline.length, 1)),
-      Math.max(pipeline.length - 1, 0)
-    );
-  const circumference = 2 * Math.PI * 52;
-
-  return (
-    <div className="pad">
-      <section className="card runHeader">
-        <div className="runRingWrap">
-          <svg viewBox="0 0 120 120" className="runRing">
-            <circle
-              cx="60"
-              cy="60"
-              r="52"
-              fill="none"
-              stroke="var(--border)"
-              strokeWidth="6"
-            />
-            <circle
-              cx="60"
-              cy="60"
-              r="52"
-              fill="none"
-              stroke="var(--accent)"
-              strokeWidth="6"
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={circumference * (1 - percent / 100)}
-              transform="rotate(-90 60 60)"
-            />
-          </svg>
-          <div className="runRingText">
-            <span className="runPct">{Math.round(percent)}%</span>
-            <span className="runState">{job?.status ?? "queued"}</span>
-          </div>
-        </div>
-        <div className="runMeta">
-          <span className="runSource">{asset?.name ?? "..."}</span>
-          <span className="runStep">
-            {job?.step
-              ? job.step
-              : "Step " + (activeIndex + 1) + " of " + pipeline.length}
-          </span>
-        </div>
-      </section>
-
-      {error && (
-        <div className="errorBox">
-          <Icons.Warn /> {error}
-        </div>
-      )}
-
-      {job?.error && (
-        <div className="errorBox">
-          <Icons.Warn /> {job.error}
-        </div>
-      )}
-
-      <section className="card logCard">
-        <div className="logHead">
-          <Icons.Terminal /> <span>Live Output</span>
-        </div>
-        <pre className="logBody">{job?.log || "Waiting for output..."}</pre>
-      </section>
-
-      <section className="stepList">
-        {pipeline.map((step, i) => (
-          <div
-            key={step.uid}
-            className={
-              "stepRow " +
-              (i < activeIndex
-                ? "stepDone"
-                : i === activeIndex
-                ? "stepActive"
-                : "")
-            }
-          >
-            <div className="stepDot">
-              {i < activeIndex ? (
-                <Icons.Check size={12} />
-              ) : i === activeIndex ? (
-                <Icons.Bolt size={12} />
-              ) : (
-                <span>{i + 1}</span>
-              )}
-            </div>
-            <span className="stepName">{step.op.name}</span>
-            {i === activeIndex && job?.status === "running" && (
-              <span className="stepPct">{Math.round(percent)}%</span>
-            )}
-          </div>
-        ))}
-      </section>
-    </div>
-  );
-}
-
-function ResultView({
-  asset, job, onAgain, onHome,
-}: {
-  asset: Asset | null;
-  job: JobProgress | null;
-  onAgain: () => void;
-  onHome: () => void;
-}) {
-  const ok = job?.status === "completed";
-  const primary = job?.outputs?.[0];
-
-  return (
-    <div className="pad">
-      <section className="card resultHero">
-        <div className={"resultIcon " + (ok ? "" : "resultIconFail")}>
-          {ok ? <Icons.Check size={28} /> : <Icons.Warn size={28} />}
-        </div>
-        <h2 className="resultTitle">
-          {ok ? "Processing complete" : "Processing failed"}
-        </h2>
-        <p className="resultSub">{job?.error || asset?.name || ""}</p>
-      </section>
-
-      {primary && (
-        <section className="card videoPreview">
-          <div className="videoThumb">
-            <Icons.Play size={28} />
-          </div>
-          <div className="videoMeta">
-            <span className="videoName">{primary.name}</span>
-            <span className="videoInfo">{formatBytes(primary.sizeBytes)}</span>
-          </div>
-        </section>
-      )}
-
-      {job?.outputs && job.outputs.length > 0 && (
-        <section>
-          <div className="rowHead">
-            <h3 className="sectionTitle">All outputs</h3>
-          </div>
-          <ul className="outputList">
-            {job.outputs.map((o) => (
-              <li key={o.name}>
-                <a className="outputRow" href={o.url} download>
-                  <Icons.Download size={16} />
-                  <span className="outputName">{o.name}</span>
-                  <span className="outputSize">{formatBytes(o.sizeBytes)}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <div className="resultActions">
-        <button className="primaryBtn" onClick={onHome}>
-          Back to Home
-        </button>
-        <button className="ghostBtnWide" onClick={onAgain}>
-          Start Another
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
-   SHEETS
-   ══════════════════════════════════════════════════════════════════════════ */
-
-function ConfigureSheet({
-  op, values, setValue, onClose, onAdd,
-}: {
-  op: Operation;
-  values: FormValues;
-  setValue: (k: string, v: unknown) => void;
-  onClose: () => void;
-  onAdd: () => void;
-}) {
-  const visible = op.params.filter((p) => evalCondition(p.showIf, values));
-
-  const groups = useMemo(() => {
-    const m = new Map<string, Param[]>();
-    for (const p of visible) {
-      const g = p.group ?? "Options";
-      if (!m.has(g)) m.set(g, []);
-      m.get(g)!.push(p);
-    }
-    return Array.from(m.entries());
-  }, [visible]);
-
-  return (
-    <Sheet
-      title={op.name}
-      badge={"tier " + op.tier + " · " + op.category}
-      note={op.description}
-      onClose={onClose}
-    >
-      {op.chainSteps && (
-        <div className="chainNote">
-          <Icons.Flow size={14} />
-          <span>Chain: {op.chainSteps.join(" → ")}</span>
-        </div>
-      )}
-
-      {groups.length === 0 && (
-        <p className="fieldHelp">No options needed. Ready to add.</p>
-      )}
-
-      {groups.map(([group, params]) => (
-        <fieldset key={group} className="fieldGroup">
-          <legend className="groupLabel">{group}</legend>
-          {params.map((p) => (
-            <Field
-              key={p.key}
-              param={p}
-              value={values[p.key]}
-              onChange={(v) => setValue(p.key, v)}
-            />
-          ))}
-        </fieldset>
-      ))}
-
-      <button className="primaryBtn" onClick={onAdd}>
-        <Icons.Plus /> Add to Pipeline
-      </button>
-    </Sheet>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
    STYLES
    ══════════════════════════════════════════════════════════════════════════ */
 
@@ -2113,9 +2911,11 @@ const STYLES = `
   --font-mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
   --radius:14px;--radius-lg:20px;
 }
+*{box-sizing:border-box}
 .app{min-height:100vh;background:var(--bg);color:var(--ink);font-family:var(--font-sans);display:flex;flex-direction:column;padding-bottom:76px}
 .topbar{display:flex;align-items:center;gap:10px;padding:14px 16px 8px;position:sticky;top:0;background:var(--bg);z-index:5}
 .iconbtn{width:36px;height:36px;border-radius:10px;border:1px solid var(--border);background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--ink);flex-shrink:0;cursor:pointer}
+.iconbtn:hover{background:var(--surface-2)}
 .title{flex:1;display:flex;flex-direction:column;min-width:0}
 .titleMain{font-size:15px;font-weight:600;line-height:1.2}
 .titleSub{font-size:12px;color:var(--ink-soft);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2124,14 +2924,14 @@ const STYLES = `
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px}
 .rowHead{display:flex;justify-content:space-between;align-items:baseline;padding:0 4px 8px}
 .sectionTitle{font-size:13px;font-weight:600;color:var(--ink);margin:0}
-.rowAction{background:transparent;border:none;color:var(--accent);font-size:12.5px;font-weight:500;cursor:pointer}
+.rowAction{background:transparent;border:none;color:var(--accent);font-size:12.5px;font-weight:500;cursor:pointer;padding:0}
 .empty{text-align:center;padding:40px 12px;color:var(--ink-mute);display:flex;flex-direction:column;gap:6px}
 .empty p{font-size:13.5px;font-weight:600;color:var(--ink-soft);margin:0}
 .empty span{font-size:12px}
 .errorBox{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:var(--danger-soft);color:var(--danger);font-size:12.5px;font-weight:500}
 
-.dropCard{display:flex;flex-direction:column;align-items:center;gap:10px;padding:32px 20px;border:1.5px dashed var(--border-strong);background:var(--surface-2);cursor:pointer;text-align:center;transition:background .15s,border-color .15s}
-.dropCard:hover{background:var(--accent-soft);border-color:var(--accent)}
+.dropCard{display:flex;flex-direction:column;align-items:center;gap:10px;padding:32px 20px;border:1.5px dashed var(--border-strong);background:var(--surface-2);cursor:pointer;text-align:center;transition:background .15s,border-color .15s;outline:none}
+.dropCard:hover,.dropCard:focus-visible{background:var(--accent-soft);border-color:var(--accent)}
 .dropCardBusy{cursor:default}
 .dropCardBusy:hover{background:var(--surface-2);border-color:var(--border-strong)}
 .dropIcon{width:52px;height:52px;border-radius:14px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center}
@@ -2140,7 +2940,8 @@ const STYLES = `
 .dropProgress{width:220px;height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:4px}
 .dropProgressBar{height:100%;background:var(--accent);transition:width .15s ease}
 
-.assetCard{display:flex;align-items:center;gap:12px;cursor:pointer}
+.assetCard{display:flex;align-items:center;gap:12px;cursor:pointer;outline:none}
+.assetCard:focus-visible{border-color:var(--accent)}
 .assetIcon{width:46px;height:46px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .assetMeta{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
 .assetLabel{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-mute);font-weight:600}
@@ -2148,37 +2949,38 @@ const STYLES = `
 .assetInfo{font-size:11.5px;color:var(--ink-soft);font-family:var(--font-mono)}
 .assetActions{display:flex;gap:6px}
 
-.quickGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.quickCard{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:11.5px;font-weight:500;color:var(--ink)}
-.quickCard > svg{color:var(--accent)}
+.quickGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:8px}
+.quickCard{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:11.5px;font-weight:500;color:var(--ink);font-family:inherit}
+.quickCard>svg{color:var(--accent)}
 
 .favScroll{display:flex;gap:10px;overflow-x:auto;padding-bottom:2px}
-.favCard{min-width:132px;display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-align:left}
+.favCard{min-width:132px;display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-align:left;font-family:inherit}
 .favIcon{width:30px;height:30px;border-radius:9px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center}
-.favName{font-size:12.5px;font-weight:600;line-height:1.3}
+.favName{font-size:12.5px;font-weight:600;line-height:1.3;color:var(--ink)}
 .favTier{font-size:11px;color:var(--ink-mute);font-family:var(--font-mono)}
 
-.pipelinePreview{display:flex;align-items:center;gap:12px;cursor:pointer;text-align:left}
-.pipelinePreview > svg:first-child{color:var(--accent);flex-shrink:0}
-.pipelinePreviewText{flex:1;display:flex;flex-direction:column;gap:2px}
-.pipelinePreviewTitle{font-size:14px;font-weight:600}
+.pipelinePreview{display:flex;align-items:center;gap:12px;cursor:pointer;text-align:left;font-family:inherit;width:100%}
+.pipelinePreview>svg:first-child{color:var(--accent);flex-shrink:0}
+.pipelinePreviewText{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.pipelinePreviewTitle{font-size:14px;font-weight:600;color:var(--ink)}
 .pipelinePreviewSub{font-size:12px;color:var(--ink-soft)}
 
 .searchWrap{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--ink-soft)}
-.searchInput{flex:1;border:none;outline:none;background:transparent;font-size:14px;color:var(--ink);font-family:var(--font-sans)}
+.searchInput{flex:1;border:none;outline:none;background:transparent;font-size:14px;color:var(--ink);font-family:var(--font-sans);min-width:0}
 .filterScroll{display:flex;gap:6px;overflow-x:auto;padding:2px 0}
-.filterChip{padding:6px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--border);font-size:12.5px;color:var(--ink-soft);cursor:pointer;white-space:nowrap}
+.filterChip{padding:6px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--border);font-size:12.5px;color:var(--ink-soft);cursor:pointer;white-space:nowrap;font-family:inherit}
 .filterActive{background:var(--ink);color:#fff;border-color:var(--ink)}
 
 .catalog{display:flex;flex-direction:column;gap:18px}
 .tierSection{display:flex;flex-direction:column;gap:8px}
 .tierHead{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-mute);font-weight:600;margin:0;padding-left:4px}
 .opList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-.opCard{width:100%;display:flex;gap:12px;align-items:center;padding:12px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);text-align:left;cursor:pointer}
+.opCard{width:100%;display:flex;gap:12px;align-items:center;padding:12px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);text-align:left;cursor:pointer;font-family:inherit;color:var(--ink)}
+.opCard:hover:not(:disabled){border-color:var(--accent)}
 .opCard:disabled{opacity:.45;cursor:not-allowed}
 .opIcon{width:36px;height:36px;border-radius:10px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .opBody{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
-.opName{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:6px}
+.opName{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:6px;color:var(--ink)}
 .opDesc{font-size:12px;color:var(--ink-soft);line-height:1.4}
 .opMeta{font-size:11px;font-family:var(--font-mono);color:var(--ink-mute);margin-top:2px}
 .chainBadge{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;background:var(--render-soft);color:var(--render);padding:2px 6px;border-radius:4px}
@@ -2189,16 +2991,16 @@ const STYLES = `
 .flowNode{display:flex;align-items:center;gap:12px;padding:12px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);text-align:left;width:100%}
 .flowNodeIcon{width:36px;height:36px;border-radius:10px;background:var(--bg);color:var(--ink-soft);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .flowNodeIconOp{background:var(--accent-soft);color:var(--accent)}
-.flowNodeIconOut{background:var(--render-soft);color:var(--render)}
-.flowNodeBody{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0;cursor:pointer}
+.flowNodeBody{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0;text-align:left}
+.flowNodeBodyBtn{background:transparent;border:none;padding:0;cursor:pointer;font-family:inherit;color:var(--ink)}
 .flowNodeLabel{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-mute);font-weight:600}
-.flowNodeValue{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.flowNodeValue{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
 .flowReorder{display:flex;flex-direction:column;gap:2px}
-.flowReorder button{border:none;background:transparent;color:var(--ink-mute);padding:2px;cursor:pointer;border-radius:4px}
+.flowReorder button{border:none;background:transparent;color:var(--ink-mute);padding:2px;cursor:pointer;border-radius:4px;line-height:0}
 .flowReorder button:disabled{opacity:.3;cursor:default}
-.flowDelete{border:none;background:transparent;color:var(--ink-mute);padding:6px;cursor:pointer;border-radius:6px}
+.flowDelete{border:none;background:transparent;color:var(--ink-mute);padding:6px;cursor:pointer;border-radius:6px;line-height:0}
 .flowDelete:hover{background:var(--danger-soft);color:var(--danger)}
-.flowAdd{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border-radius:var(--radius);background:var(--surface-2);border:1px dashed var(--border-strong);color:var(--ink-soft);font-size:13px;font-weight:500;cursor:pointer}
+.flowAdd{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border-radius:var(--radius);background:var(--surface-2);border:1px dashed var(--border-strong);color:var(--ink-soft);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit}
 .flowAdd:hover{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .flowEmpty{text-align:center;padding:24px;color:var(--ink-mute);display:flex;flex-direction:column;align-items:center;gap:6px}
 .flowEmpty p{font-size:13px;font-weight:600;color:var(--ink-soft);margin:4px 0 0}
@@ -2211,7 +3013,7 @@ const STYLES = `
 
 .primaryBtn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px 18px;background:var(--ink);color:#fff;border:none;border-radius:999px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font-sans)}
 .primaryBtn:disabled{opacity:.4;cursor:default}
-.ghostBtnWide{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px 18px;background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:999px;font-size:13.5px;font-weight:600;cursor:pointer}
+.ghostBtnWide{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px 18px;background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:999px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit}
 .miniBtn{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--border);font-size:11.5px;color:var(--ink-soft);cursor:pointer;font-family:var(--font-mono)}
 .miniBtn:hover{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
 .miniBtnDanger:hover{background:var(--danger-soft);color:var(--danger);border-color:var(--danger)}
@@ -2266,20 +3068,20 @@ const STYLES = `
 .sheetHeadLeft{display:flex;flex-direction:column;gap:2px;min-width:0}
 .sheetTitle{font-size:16px;font-weight:700}
 .sheetBadge{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-mute);font-weight:600;font-family:var(--font-mono)}
-.closebtn{border:none;background:transparent;color:var(--ink-soft);padding:6px;cursor:pointer;border-radius:8px}
+.closebtn{border:none;background:transparent;color:var(--ink-soft);padding:6px;cursor:pointer;border-radius:8px;line-height:0}
 .closebtn:hover{background:var(--bg)}
 .sheetNote{font-size:12.5px;color:var(--ink-soft);line-height:1.55;margin:0 0 14px}
 .sheetBody{display:flex;flex-direction:column;gap:16px}
-.chainNote{display:flex;align-items:center;gap:6px;padding:8px 12px;border-radius:10px;background:var(--render-soft);color:var(--render);font-size:12px;font-weight:500;margin-bottom:14px}
-.fieldGroup{border:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
-.groupLabel{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-mute);font-weight:600;padding:0 0 4px}
+.chainNote{display:flex;align-items:center;gap:6px;padding:8px 12px;border-radius:10px;background:var(--render-soft);color:var(--render);font-size:12px;font-weight:500}
+.fieldGroup{display:flex;flex-direction:column;gap:12px}
+.groupLabel{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-mute);font-weight:600;padding-bottom:4px}
 
 .field{display:flex;flex-direction:column;gap:6px}
-.fieldHead{display:flex;justify-content:space-between;align-items:baseline;font-size:13px}
+.fieldHead{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;gap:8px}
 .fieldLabel{color:var(--ink-soft)}
 .fieldValue{font-family:var(--font-mono);font-size:12px;color:var(--ink)}
 .fieldHelp{font-size:11.5px;color:var(--ink-mute);margin:0;line-height:1.4}
-input[type="text"],input[type="number"],textarea,select{width:100%;padding:9px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink);font-size:14px;font-family:var(--font-sans);-webkit-appearance:none;appearance:none;box-sizing:border-box}
+input[type="text"],input[type="number"],textarea,select{width:100%;padding:9px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink);font-size:14px;font-family:var(--font-sans);-webkit-appearance:none;appearance:none}
 select{padding-right:34px;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235b6065' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");background-repeat:no-repeat;background-position:right 12px center}
 textarea{resize:vertical;font-family:var(--font-mono);font-size:12.5px}
 .checkboxRow{display:flex;align-items:center;gap:10px;font-size:13.5px}
@@ -2296,20 +3098,8 @@ textarea{resize:vertical;font-family:var(--font-mono);font-size:12.5px}
 .infoVal{font-size:13px;text-align:right;font-family:var(--font-mono);word-break:break-word}
 
 .bottomNav{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:space-around;align-items:center;padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--border);z-index:30}
-.navBtn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 12px;background:transparent;border:none;cursor:pointer;color:var(--ink-mute)}
+.navBtn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 12px;background:transparent;border:none;cursor:pointer;color:var(--ink-mute);font-family:inherit}
 .navActive{color:var(--accent)}
 .navIcon{position:relative;display:flex}
 .navBadge{position:absolute;top:-4px;right:-8px;min-width:16px;height:16px;padding:0 4px;background:var(--accent);color:#fff;border-radius:8px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono)}
-.navLabel{font-size:10.5px;font-weight:500}
-
-@media (min-width:720px){
-  .app{max-width:720px;margin:0 auto;border-left:1px solid var(--border);border-right:1px solid var(--border)}
-}
-`;
-
-if (typeof document !== "undefined" && !document.getElementById("ffmpeg-page-styles")) {
-  const el = document.createElement("style");
-  el.id = "ffmpeg-page-styles";
-  el.textContent = STYLES;
-  document.head.appendChild(el);
-}
+.navLabel{font-size:10.5px

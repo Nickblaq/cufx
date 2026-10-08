@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createJob, startPythonDownload } from "@/lib/jobs";
+import { callCreateJob, callStartDownload } from "@/lib/callPythonJSON";
 
 export type StartExtractOptions = {
   url: string;
@@ -31,8 +31,8 @@ export async function POST(req: NextRequest) {
     if (!item.url) {
       return NextResponse.json({ error: "Missing url on item" }, { status: 400 });
     }
-    const jobId = await createJob();
-    startPythonDownload(jobId, JSON.stringify(item));
+    const jobId = await callCreateJob();
+    callStartDownload(jobId, JSON.stringify(item));
     jobIds.push(jobId);
   }
 

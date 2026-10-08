@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callJobStatus } from "@/lib/jobs";
+import { callJobStatus } from "@/lib/callPythonJSON";
 
 export async function GET(req: NextRequest) {
   const jobId = req.nextUrl.searchParams.get("jobId");
@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing jobId" }, { status: 400 });
   }
 
-  const status = await readJobStatus(jobId);
+  const status = await callJobStatus(jobId);
   if (!status) {
     return NextResponse.json({ status: "starting", progress: 0 });
   }

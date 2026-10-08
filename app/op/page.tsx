@@ -1,7 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentType } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { ChangeEvent, ComponentType, DragEvent } from "react";
 import {
   type IconProps,
   type Operation,
@@ -11,14 +17,13 @@ import {
   type View,
   type PipelineStep,
 } from "@/lib/studio/types";
-import { evalCondition, defaultValues, makeUid } from "@/lib/studio/helpers";
+import { evalCondition, defaultValues, formatBytes, makeUid } from "@/lib/studio/helpers";
 import { createStudioClient } from "@/lib/studio/api";
 import { Icons } from "@/components/studio/Icons";
 import { useStudioStyles } from "@/components/studio/useStudioStyles";
 import { Sheet } from "@/components/studio/Sheet";
 import { Field } from "@/components/studio/Field";
 import { NavButton } from "@/components/studio/NavButton";
-import { Empty } from "@/components/studio/Empty";
 import { useAsync } from "@/hooks/studio/useAsync";
 import { useJobPoll } from "@/hooks/studio/useJobPoll";
 import { CatalogView } from "@/components/studio/views/CatalogView";
@@ -28,78 +33,50 @@ import { ResultView } from "@/components/studio/views/ResultView";
 
 /* ---------------------------- page-specific types --------------------------- */
 
-type SheetKind = null | "configure" | "info" | "formats" | "subs";
+type SheetKind = null | "configure" | "asset";
 
-type MediaFormat = {
+type AssetKind = "video" | "audio" | "image";
+
+type Asset = {
   id: string;
-  label: string;
-  ext: string;
-  size: string;
-  note: string;
-};
-
-type Subtitle = {
-  lang: string;
-  label: string;
-  auto: boolean;
-};
-
-type MediaInfo = {
-  url: string;
-  kind: "audio" | "video";
-  id: string;
-  title: string;
-  uploader: string;
-  duration: string;
-  views: string;
-  uploadedAt: string;
-  thumbnail: string;
-  formats: MediaFormat[];
-  subtitles: Subtitle[];
+  name: string;
+  kind: AssetKind;
+  sizeBytes: number;
+  duration?: string;
+  meta?: string;
 };
 
 /* ---------------------------------- API ----------------------------------- */
 
 const API = createStudioClient({
-  runUrl: "/api/op/run",
-  jobUrl: (id) => `/api/op/job/${id}`,
-  downloadUrl: (id) => `/api/op/download?jobId=${encodeURIComponent(id)}`,
+  runUrl: "/api/ff/run",
+  jobUrl: (id) => `/api/ff/job/${id}`,
+  uploadUrl: "/api/ff/upload",
+  downloadUrl: (id) => `/api/ff/download?jobId=${encodeURIComponent(id)}`,
 });
-
-const inspectUrl = async (url: string): Promise<MediaInfo> => {
-  const res = await fetch("/api/op/inspect", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
-  });
-  const data = await res.json();
-  if (!res.ok || !data.ok) throw new Error(data.error || "Failed to inspect");
-  return data.info as MediaInfo;
-};
 
 /* ------------------------------- registry --------------------------------- */
 
 const TIERS: Record<number, string> = {
-  1: "Basic Downloads",
-  2: "Quality & Selection",
-  3: "Files & Metadata",
-  4: "Auth & Subtitles",
-  5: "Preset Pipelines",
+  1: "Basic Operations",
+  2: "Intermediate",
+  3: "Advanced Video",
+  4: "Advanced Audio",
+  5: "Chained Presets",
   6: "Expert",
 };
 
 const TIER_FILTERS = [
   { id: "all", label: "All" },
   { id: "basic", label: "Basic" },
-  { id: "quality", label: "Quality" },
-  { id: "files", label: "Files" },
-  { id: "auth", label: "Auth" },
-  { id: "presets", label: "Presets" },
+  { id: "intermediate", label: "Inter." },
+  { id: "video", label: "Video" },
+  { id: "audio", label: "Audio" },
+  { id: "chains", label: "Chains" },
   { id: "expert", label: "Expert" },
 ] as const;
 
 type TierFilter = (typeof TIER_FILTERS)[number]["id"];
-
 
 const OPERATIONS: Operation[] = [
   /* ─── Tier 1: Basic ──────────────────────────────────────────────────── */
@@ -1145,52 +1122,55 @@ const OPERATIONS: Operation[] = [
   },
 ];
 
-
 /* ------------------------------- helpers --------------------------------- */
 
-function acceptsSource(op: Operation, kind: "audio" | "video"): boolean {
-  return op.accepts === "both" || op.accepts === kind;
+function acceptsSource(op: Operation, kind: AssetKind): boolean {
+  if (op.accepts === "both") return true;
+  if (op.accepts === "audio") return kind === "audio";
+  if (op.accepts === "video") return kind === "video" || kind === "image";
+  return true;
 }
 
-function shortUrl(u: string): string {
-  return u.length > 44 ? u.slice(0, 41) + "..." : u;
-}
-
-function headerTitle(v: View): string {
-  return {
-    home: "Downloads",
-    catalog: "Operations",
-    pipeline: "Pipeline",
-    run: "Working",
-    result: "Done",
-  }[v];
-}
+const HEADER_TITLES: Record<View, string> = {
+  home: "Media Studio",
+  catalog: "Operations",
+  pipeline: "Pipeline",
+  run: "Working",
+  result: "Done",
+};
 
 function headerSub(
   v: View,
   pipeline: PipelineStep[],
-  info: MediaInfo | null,
+  asset: Asset | null,
   job: JobProgress | null
 ): string {
-  if (v === "home") return info ? shortUrl(info.title) : "paste a URL to start";
-  if (v === "catalog") return String(pipeline.length) + " in pipeline";
-  if (v === "pipeline")
-    return pipeline.length ? String(pipeline.length) + " steps" : "empty";
-  if (v === "run")
-    return job ? job.status + " · " + String(job.percent) + "%" : "starting...";
-  return "output ready";
+  switch (v) {
+    case "home":
+      return asset ? asset.name : "no source loaded";
+    case "catalog":
+      return `${pipeline.length} in pipeline`;
+    case "pipeline":
+      return pipeline.length ? `${pipeline.length} steps` : "empty";
+    case "run":
+      return job ? `${job.status} · ${Math.round(job.percent)}%` : "starting…";
+    case "result":
+      return job?.status === "completed" ? "output ready" : "finished";
+    default:
+      return "";
+  }
 }
 
 /* ---------------------------------- page ---------------------------------- */
 
-export default function OpPage() {
+export default function FfmpegPage() {
   useStudioStyles();
 
   const [view, setView] = useState<View>("home");
   const [sheet, setSheet] = useState<SheetKind>(null);
 
-  const [url, setUrl] = useState("");
-  const [info, setInfo] = useState<MediaInfo | null>(null);
+  const [asset, setAsset] = useState<Asset | null>(null);
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [selectedOp, setSelectedOp] = useState<Operation | null>(null);
   const [values, setValues] = useState<FormValues>({});
   const [pipeline, setPipeline] = useState<PipelineStep[]>([]);
@@ -1205,28 +1185,28 @@ export default function OpPage() {
     API.job
   );
 
-  const inspect = useAsync<MediaInfo>();
   const runJob = useAsync<string>();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const visibleOps = useMemo(() => {
     const ranges: Record<TierFilter, [number, number]> = {
       all: [1, 6],
       basic: [1, 1],
-      quality: [2, 2],
-      files: [3, 3],
-      auth: [4, 4],
-      presets: [5, 5],
+      intermediate: [2, 2],
+      video: [3, 3],
+      audio: [4, 4],
+      chains: [5, 5],
       expert: [6, 6],
     };
     const [lo, hi] = ranges[tierFilter];
     const q = search.trim().toLowerCase();
     return OPERATIONS.filter((op) => {
       if (op.tier < lo || op.tier > hi) return false;
-      if (info && !acceptsSource(op, info.kind)) return false;
+      if (asset && !acceptsSource(op, asset.kind)) return false;
       if (!q) return true;
       return (op.name + op.description + op.category).toLowerCase().includes(q);
     });
-  }, [tierFilter, search, info]);
+  }, [tierFilter, search, asset]);
 
   const grouped = useMemo(() => {
     const map = new Map<number, Operation[]>();
@@ -1240,16 +1220,41 @@ export default function OpPage() {
   const favorites = useMemo(
     () =>
       OPERATIONS.filter(
-        (o) => o.favorite && (!info || acceptsSource(o, info.kind))
+        (o) => o.favorite && (!asset || acceptsSource(o, asset.kind))
       ),
-    [info]
+    [asset]
   );
 
-  async function handleInspect() {
-    if (!url.trim()) return;
-    const result = await inspect.run(() => inspectUrl(url.trim()));
-    if (result) setInfo(result);
-  }
+  const handleFile = useCallback(async (file: File) => {
+    setUploadPercent(0);
+    try {
+      const uploaded = await API.upload(file, (p) => setUploadPercent(p));
+      setAsset(uploaded);
+      setPipeline([]);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploadPercent(null);
+    }
+  }, []);
+
+  const onFilePick = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const f = e.target.files?.[0];
+      if (f) handleFile(f);
+      e.target.value = "";
+    },
+    [handleFile]
+  );
+
+  const onDrop = useCallback(
+    (e: DragEvent<HTMLElement>) => {
+      e.preventDefault();
+      const f = e.dataTransfer.files?.[0];
+      if (f) handleFile(f);
+    },
+    [handleFile]
+  );
 
   function openConfigure(op: Operation) {
     setSelectedOp(op);
@@ -1265,7 +1270,7 @@ export default function OpPage() {
   }
 
   function removeStep(uid: string) {
-    setPipeline((p) => p.filter((s) => s.uid !== uid));
+    setPipeline((p) => p.filter((x) => x.uid !== uid));
   }
 
   function moveStep(index: number, dir: -1 | 1) {
@@ -1279,13 +1284,13 @@ export default function OpPage() {
   }
 
   async function handleRun() {
-    if (!info || pipeline.length === 0) return;
-    const operations: OperationPayload[] = pipeline.map((s) => ({
-      id: s.op.id,
-      params: s.values,
+    if (!asset || pipeline.length === 0) return;
+    const operations: OperationPayload[] = pipeline.map((step) => ({
+      id: step.op.id,
+      params: step.values,
     }));
     const result = await runJob.run(() =>
-      API.run([{ id: "main", role: "main" }], operations)
+      API.run([{ id: asset.id, role: "main" }], operations)
     );
     if (result) {
       setJobId(result);
@@ -1296,6 +1301,7 @@ export default function OpPage() {
   function resetAll() {
     setJobId(null);
     setPipeline([]);
+    setAsset(null);
     setView("home");
   }
 
@@ -1306,102 +1312,142 @@ export default function OpPage() {
     }
   }, [view, job]);
 
+  const headerPrimaryAction = useCallback(() => {
+    if (view !== "home") setView("home");
+  }, [view]);
+
   const quickPicks: { id: string; label: string; icon: ComponentType<IconProps> }[] = [
-    { id: "quick-best", label: "Best", icon: Icons.Bolt },
-    { id: "audio-mp3", label: "MP3", icon: Icons.Music },
-    { id: "resolution-cap", label: "1080p", icon: Icons.Video },
-    { id: "section-download", label: "Cut", icon: Icons.Scissors },
+    { id: "convert", label: "Convert", icon: Icons.Archive },
+    { id: "trim", label: "Trim", icon: Icons.Scissors },
+    { id: "scale", label: "Scale", icon: Icons.Settings },
+    { id: "youtube-preset", label: "YouTube", icon: Icons.Bolt },
   ];
+
+  const isUploading = uploadPercent !== null && uploadPercent < 100;
 
   return (
     <div className="app">
       <header className="topbar">
         <button
           className="iconbtn"
-          onClick={() => (view === "home" ? resetAll() : setView("home"))}
-          aria-label="Back"
+          onClick={headerPrimaryAction}
+          aria-label={view === "home" ? "Home" : "Back"}
           type="button"
         >
           {view === "home" ? <Icons.Bolt /> : <Icons.Back />}
         </button>
         <div className="title">
-          <span className="titleMain">{headerTitle(view)}</span>
-          <span className="titleSub">{headerSub(view, pipeline, info, job)}</span>
+          <span className="titleMain">{HEADER_TITLES[view]}</span>
+          <span className="titleSub">
+            {headerSub(view, pipeline, asset, job)}
+          </span>
         </div>
       </header>
 
       <main className="main">
         {view === "home" && (
           <div className="pad">
-            <section className="card urlCard">
-              <div className="urlHead">
-                <Icons.Link />
-                <span>Source URL</span>
-              </div>
-              <input
-                className="urlInput"
-                placeholder="YouTube, TikTok, Twitter, SoundCloud, direct URL..."
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
+            {!asset ? (
+              <section
+                className={"card dropCard" + (isUploading ? " dropCardBusy" : "")}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={isUploading ? undefined : onDrop}
+                onClick={isUploading ? undefined : () => fileInputRef.current?.click()}
+                role={isUploading ? undefined : "button"}
+                tabIndex={isUploading ? undefined : 0}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && url && !inspect.loading) handleInspect();
+                  if (isUploading) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    fileInputRef.current?.click();
+                  }
                 }}
-              />
-              <button
-                className="primaryBtn"
-                onClick={handleInspect}
-                disabled={!url || inspect.loading}
-                type="button"
               >
-                {inspect.loading ? "Inspecting..." : "Inspect"}
-              </button>
-              {inspect.error && (
-                <div className="errorBox">
-                  <Icons.Warn /> {inspect.error}
+                {isUploading ? (
+                  <>
+                    <div className="dropIcon">
+                      <Icons.Upload />
+                    </div>
+                    <div className="dropTitle">Uploading…</div>
+                    <div className="dropProgress">
+                      <div
+                        className="dropProgressBar"
+                        style={{ width: `${uploadPercent}%` }}
+                      />
+                    </div>
+                    <span className="dropHint">{uploadPercent}%</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="dropIcon">
+                      <Icons.Upload />
+                    </div>
+                    <div className="dropTitle">Add a media file</div>
+                    <span className="dropHint">
+                      Drop a video, audio, or image here, or tap to browse.
+                    </span>
+                  </>
+                )}
+              </section>
+            ) : (
+              <section
+                className="card assetCard"
+                onClick={() => setSheet("asset")}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSheet("asset");
+                  }
+                }}
+              >
+                <div className="assetIcon">
+                  {asset.kind === "audio" ? (
+                    <Icons.Music />
+                  ) : asset.kind === "image" ? (
+                    <Icons.Image />
+                  ) : (
+                    <Icons.Video />
+                  )}
                 </div>
-              )}
-            </section>
-
-            {info && (
-              <section className="card mediaCard">
-                <div className="mediaThumb">
-                  <Icons.Play size={28} />
-                  <span className="mediaDuration">{info.duration}</span>
-                </div>
-                <div className="mediaMeta">
-                  <span className="mediaTitle">{info.title}</span>
-                  <span className="mediaSub">{info.uploader}</span>
-                  <span className="mediaStats">
-                    {info.views} · {info.uploadedAt} · {info.kind}
+                <div className="assetMeta">
+                  <span className="assetLabel">Source</span>
+                  <span className="assetName">{asset.name}</span>
+                  <span className="assetInfo">
+                    {formatBytes(asset.sizeBytes)}
+                    {asset.duration ? ` · ${asset.duration}` : ""}
+                    {` · ${asset.kind}`}
                   </span>
                 </div>
-                <div className="mediaActions">
+                <div className="assetActions">
                   <button
                     className="miniBtn"
                     type="button"
-                    onClick={() => setSheet("formats")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      fileInputRef.current?.click();
+                    }}
                   >
-                    <Icons.Video size={14} /> {info.formats.length} formats
+                    Replace
                   </button>
                   <button
-                    className="miniBtn"
+                    className="miniBtn miniBtnDanger"
                     type="button"
-                    onClick={() => setSheet("subs")}
+                    aria-label="Remove"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAsset(null);
+                      setPipeline([]);
+                    }}
                   >
-                    <Icons.Subtitle size={14} /> {info.subtitles.length} subs
-                  </button>
-                  <button
-                    className="miniBtn"
-                    type="button"
-                    onClick={() => setSheet("info")}
-                  >
-                    <Icons.Info size={14} /> Details
+                    <Icons.Trash />
                   </button>
                 </div>
               </section>
             )}
 
-            {info && (
+            {asset && (
               <section>
                 <div className="rowHead">
                   <h3 className="sectionTitle">Quick Actions</h3>
@@ -1409,7 +1455,7 @@ export default function OpPage() {
                 <div className="quickGrid">
                   {quickPicks.map((qp) => {
                     const op = OPERATIONS.find((o) => o.id === qp.id);
-                    if (!op || !acceptsSource(op, info.kind)) return null;
+                    if (!op || !acceptsSource(op, asset.kind)) return null;
                     const Icon = qp.icon;
                     return (
                       <button
@@ -1427,7 +1473,7 @@ export default function OpPage() {
               </section>
             )}
 
-            {info && favorites.length > 0 && (
+            {asset && favorites.length > 0 && (
               <section>
                 <div className="rowHead">
                   <h3 className="sectionTitle">Favorites</h3>
@@ -1505,8 +1551,9 @@ export default function OpPage() {
 
         {view === "pipeline" && (
           <PipelineView
-            source={info}
-            sourceKind={info?.kind}
+            source={asset}
+            sourceKind={asset?.kind}
+            sourceSizeBytes={asset?.sizeBytes}
             pipeline={pipeline}
             onAdd={() => setView("catalog")}
             onRemove={removeStep}
@@ -1523,16 +1570,21 @@ export default function OpPage() {
         )}
 
         {view === "run" && (
-          <RunView source={info} pipeline={pipeline} job={job} error={pollError} />
+          <RunView
+            source={asset}
+            pipeline={pipeline}
+            job={job}
+            error={pollError}
+          />
         )}
 
         {view === "result" && (
           <ResultView
-            source={info}
+            source={asset}
             job={job}
             downloadUrl={API.downloadUrl}
-            titleComplete="Download complete"
-            titleFailed="Download failed"
+            titleComplete="Processing complete"
+            titleFailed="Processing failed"
             onAgain={() => {
               setJobId(null);
               setView("home");
@@ -1564,11 +1616,19 @@ export default function OpPage() {
         />
       </nav>
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        style={{ display: "none" }}
+        onChange={onFilePick}
+        accept="video/*,audio/*,image/*"
+      />
+
       {sheet === "configure" && selectedOp && (
         <ConfigureSheet
           op={selectedOp}
           values={values}
-          setValue={(k, v) => setValues((p) => ({ ...p, [k]: v }))}
+          setValue={(k, v) => setValues((prev) => ({ ...prev, [k]: v }))}
           onClose={() => {
             setSheet(null);
             setSelectedOp(null);
@@ -1577,35 +1637,39 @@ export default function OpPage() {
         />
       )}
 
-      {sheet === "info" && info && (
+      {sheet === "asset" && asset && (
         <Sheet
-          title="Media Info"
+          title="Source Asset"
+          badge={asset.kind}
           onClose={() => setSheet(null)}
-          note="Metadata returned by the inspector."
+          note="This file will be processed by the server when you run the pipeline."
         >
-          <InfoList info={info} />
-        </Sheet>
-      )}
-
-      {sheet === "formats" && info && (
-        <Sheet
-          title="Available Formats"
-          badge={String(info.formats.length) + " formats"}
-          onClose={() => setSheet(null)}
-          note="Enumerated from the extractor."
-        >
-          <FormatList formats={info.formats} />
-        </Sheet>
-      )}
-
-      {sheet === "subs" && info && (
-        <Sheet
-          title="Subtitles"
-          badge={String(info.subtitles.length) + " languages"}
-          onClose={() => setSheet(null)}
-          note="Manual and auto-generated captions."
-        >
-          <SubList subs={info.subtitles} />
+          <div className="infoList">
+            <div className="infoRow">
+              <span className="infoKey">Name</span>
+              <span className="infoVal">{asset.name}</span>
+            </div>
+            <div className="infoRow">
+              <span className="infoKey">Kind</span>
+              <span className="infoVal">{asset.kind}</span>
+            </div>
+            <div className="infoRow">
+              <span className="infoKey">Size</span>
+              <span className="infoVal">{formatBytes(asset.sizeBytes)}</span>
+            </div>
+            {asset.duration && (
+              <div className="infoRow">
+                <span className="infoKey">Duration</span>
+                <span className="infoVal">{asset.duration}</span>
+              </div>
+            )}
+            {asset.meta && (
+              <div className="infoRow">
+                <span className="infoKey">Details</span>
+                <span className="infoVal">{asset.meta}</span>
+              </div>
+            )}
+          </div>
         </Sheet>
       )}
     </div>
@@ -1678,65 +1742,5 @@ function ConfigureSheet({
         <Icons.Plus /> Add to Pipeline
       </button>
     </Sheet>
-  );
-}
-
-function InfoList({ info }: { info: MediaInfo }) {
-  const rows: [string, string][] = [
-    ["ID", info.id],
-    ["Title", info.title],
-    ["Uploader", info.uploader],
-    ["Kind", info.kind],
-    ["Duration", info.duration],
-    ["Views", info.views],
-    ["Uploaded", info.uploadedAt],
-    ["Formats", String(info.formats.length)],
-    ["Subtitles", String(info.subtitles.length)],
-  ];
-  return (
-    <div className="infoList">
-      {rows.map(([k, v]) => (
-        <div key={k} className="infoRow">
-          <span className="infoKey">{k}</span>
-          <span className="infoVal">{v}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function FormatList({ formats }: { formats: MediaFormat[] }) {
-  return (
-    <div className="formatList">
-      {formats.map((f) => (
-        <div key={f.id} className="formatRow">
-          <span className="formatId">{f.id}</span>
-          <div className="formatBody">
-            <span className="formatLabel">{f.label}</span>
-            <span className="formatMeta">
-              {f.ext} · {f.size} · {f.note}
-            </span>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SubList({ subs }: { subs: Subtitle[] }) {
-  return (
-    <div className="formatList">
-      {subs.map((s, i) => (
-        <div key={s.lang + i} className="formatRow">
-          <span className="formatId">{s.lang}</span>
-          <div className="formatBody">
-            <span className="formatLabel">{s.label}</span>
-            <span className="formatMeta">
-              {s.auto ? "auto-generated" : "manual"}
-            </span>
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }

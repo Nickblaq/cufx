@@ -1,6 +1,7 @@
 // lib/ff/status.ts
 import "server-only";
 import { readJobStatus } from "@/lib/jobs";
+import { sweepExpiredMedia } from "@/lib/cleanup";
 
 export type FfJobStatus = "queued" | "running" | "completed" | "failed";
 
@@ -27,6 +28,10 @@ function mapStatus(raw: string | undefined): FfJobStatus {
 export async function getFfJobProgress(
   jobId: string
 ): Promise<FfJobProgress | null> {
+  // Polling is the heartbeat of a running pipeline, so it is also the natural
+  // place to expire media the server no longer needs.
+  void sweepExpiredMedia();
+
   const raw = await readJobStatus(jobId);
   if (!raw) return { jobId, status: "queued", percent: 0, step: "Starting" };
 

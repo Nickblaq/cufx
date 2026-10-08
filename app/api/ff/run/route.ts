@@ -1,7 +1,7 @@
 // app/api/ff/run/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createJob, jobDirs, startPythonFfmpeg } from "@/lib/jobs";
+import { createJob, jobDirs, startPythonFfmpeg, stageJobInput } from "@/lib/jobs";
 import { loadAsset } from "@/lib/ff/assets";
 import { translateOperations, type ResolvedInput } from "@/lib/ff/translate";
 
@@ -54,9 +54,13 @@ export async function POST(req: NextRequest) {
     const jobId = await createJob();
     const { outputDir } = jobDirs(jobId);
 
+    // Work from the job's own copy of the source: the catalog's media expires
+    // on a 15-minute idle clock, and an encode can easily outlive that.
+    const inputPath = await stageJobInput(jobId, asset.path, asset.name);
+
     const input: ResolvedInput = {
       role: primary.role,
-      path: asset.path,
+      path: inputPath,
       kind: asset.kind,
       name: asset.name,
     };

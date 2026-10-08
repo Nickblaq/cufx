@@ -1,12 +1,21 @@
 // lib/ff/assets.ts
+//
+// Upload storage now lives in the shared catalog. An uploaded file is just a
+// MediaObject with origin "upload": the bytes are content-addressed once, and
+// every tool (ffmpeg pipelines here, the catalog browser, future tools) sees
+// the same object. `loadAsset` rehydrates the shape the ffmpeg translator
+// expects from that record.
 import "server-only";
-import fs_promises from "node:fs/promises";
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { randomUUID } from "node:crypto";
-
-const ASSETS_ROOT = path.join(os.tmpdir(), "cufx-assets");
+import { execFile } from "node:child_process";
+import {
+  ingestObject,
+  getStoredObject,
+  objectFilePath,
+  setObjectDuration,
+} from "@/lib/catalog/store";
+import type { MediaKind } from "@/lib/catalog/types";
+import { sweepExpiredMedia } from "@/lib/cleanup";
 
 export type AssetKind = "video" | "audio" | "image";
 
@@ -20,73 +29,22 @@ export type StoredAsset = {
   meta?: string;
 };
 
-const META_FILENAME = "asset.json";
-
-function assetDir(id: string) {
-  return path.join(ASSETS_ROOT, id);
+function clampKind(kind: MediaKind): AssetKind {
+  return kind === "audio" || kind === "image" ? kind : "video";
 }
 
-function kindFromMime(mime: string, fallbackName: string): AssetKind {
-  if (mime.startsWith("video/")) return "video";
-  if (mime.startsWith("audio/")) return "audio";
-  if (mime.startsWith("image/")) return "image";
-  const ext = fallbackName.split(".").pop()?.toLowerCase() ?? "";
-  if (["mp4", "mkv", "webm", "mov", "avi", "m4v"].includes(ext)) return "video";
-  if (["mp3", "m4a", "aac", "wav", "flac", "opus", "ogg"].includes(ext)) return "audio";
-  if (["jpg", "jpeg", "png", "webp", "gif", "bmp"].includes(ext)) return "image";
-  return "video";
+function formatDuration(seconds: number | null | undefined): string | undefined {
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return undefined;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  return h > 0
+    ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+    : `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export async function saveAsset(
-  fileBuffer: Buffer,
-  originalName: string,
-  mime: string
-): Promise<StoredAsset> {
-  const id = randomUUID();
-  const dir = assetDir(id);
-  await fs_promises.mkdir(dir, { recursive: true });
-
-  const safe = originalName.replace(/[^\w.\- ]+/g, "_").slice(0, 180) || "upload";
-  const filePath = path.join(dir, safe);
-  await fs_promises.writeFile(filePath, fileBuffer);
-
-  const kind = kindFromMime(mime, safe);
-  const duration = await probeDuration(filePath).catch(() => undefined);
-
-  const asset: StoredAsset = {
-    id,
-    name: safe,
-    kind,
-    sizeBytes: fileBuffer.byteLength,
-    path: filePath,
-    duration,
-  };
-
-  await fs_promises.writeFile(
-    path.join(dir, META_FILENAME),
-    JSON.stringify(asset)
-  );
-
-  return asset;
-}
-
-export async function loadAsset(id: string): Promise<StoredAsset | null> {
-  try {
-    const raw = await fs_promises.readFile(
-      path.join(assetDir(id), META_FILENAME),
-      "utf8"
-    );
-    const parsed = JSON.parse(raw) as StoredAsset;
-    if (!fs.existsSync(parsed.path)) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-async function probeDuration(filePath: string): Promise<string | undefined> {
+function probeDurationSeconds(filePath: string): Promise<number | null> {
   return new Promise((resolve) => {
-    const { execFile } = require("node:child_process") as typeof import("node:child_process");
     execFile(
       "ffprobe",
       [
@@ -97,18 +55,68 @@ async function probeDuration(filePath: string): Promise<string | undefined> {
       ],
       { timeout: 15_000 },
       (err, stdout) => {
-        if (err) return resolve(undefined);
+        if (err) return resolve(null);
         const secs = parseFloat(stdout.toString().trim());
-        if (!Number.isFinite(secs) || secs <= 0) return resolve(undefined);
-        const h = Math.floor(secs / 3600);
-        const m = Math.floor((secs % 3600) / 60);
-        const s = Math.floor(secs % 60);
-        resolve(
-          h > 0
-            ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
-            : `${m}:${String(s).padStart(2, "0")}`
-        );
+        resolve(Number.isFinite(secs) && secs > 0 ? secs : null);
       }
     );
   });
+}
+
+export async function saveAsset(
+  fileBuffer: Buffer,
+  originalName: string,
+  mime: string
+): Promise<StoredAsset> {
+  const safe = originalName.replace(/[^\w.\- ]+/g, "_").slice(0, 180) || "upload";
+
+  const object = await ingestObject({
+    data: fileBuffer,
+    name: safe,
+    mime: mime || null,
+    origin: "upload",
+    tool: "upload",
+  });
+
+  let duration = object.durationSeconds;
+  if (duration == null) {
+    const filePath = objectFilePath(object.id);
+    if (filePath) {
+      const secs = await probeDurationSeconds(filePath);
+      if (secs != null) {
+        setObjectDuration(object.id, secs);
+        duration = secs;
+      }
+    }
+  }
+
+  // An upload is the moment new media appears, so it is also the moment to
+  // drop whatever has expired.
+  void sweepExpiredMedia();
+
+  return {
+    id: object.id,
+    name: object.name,
+    kind: clampKind(object.kind),
+    sizeBytes: object.sizeBytes,
+    path: objectFilePath(object.id) ?? "",
+    duration: formatDuration(duration),
+  };
+}
+
+export async function loadAsset(id: string): Promise<StoredAsset | null> {
+  const stored = getStoredObject(id);
+  if (!stored) return null;
+
+  const filePath = objectFilePath(id);
+  if (!filePath || !fs.existsSync(filePath)) return null;
+
+  return {
+    id: stored.id,
+    name: stored.name,
+    kind: clampKind(stored.kind),
+    sizeBytes: stored.sizeBytes,
+    path: filePath,
+    duration: formatDuration(stored.durationSeconds),
+  };
 }

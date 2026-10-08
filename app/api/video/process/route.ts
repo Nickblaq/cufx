@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { JOBS_DIR } from "@/lib/tmp";
 
 export const runtime = "nodejs";
 
@@ -77,7 +77,9 @@ function buildAudioFilters(ops: VideoOps): string[] {
 
 export async function POST(req: NextRequest) {
   const jobId = randomUUID();
-  const jobDir = path.join(os.tmpdir(), "cufx-video", jobId);
+  // Deleted at the end of the request; living under the shared job root means
+  // a process that dies mid-encode still gets its leftovers swept away.
+  const jobDir = path.join(JOBS_DIR, jobId);
 
   try {
     const form = await req.formData();

@@ -9,6 +9,9 @@ __pycache__/
 out/
 tsconfig.tsbuildinfo
 
+# Local catalog data (SQLite index + content-addressed blobs)
+.cufx-data/
+
 # Environment / secrets
 .env
 .env*.local

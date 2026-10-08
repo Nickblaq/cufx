@@ -33,11 +33,39 @@ export function jobDirs(jobId: string) {
   };
 }
 
+const JOB_META_FILE = "job.json";
+
 export async function createJob(): Promise<string> {
   const jobId = randomUUID();
-  const { dir, outputDir } = jobDirs(jobId);
+  const { outputDir } = jobDirs(jobId);
   await fs_promises.mkdir(outputDir, { recursive: true });
   return jobId;
+}
+
+/**
+ * Records what a job was asked to do (source url, mode, requested ops) next to
+ * its outputs, so anything downstream — the catalog, the UI — can recover the
+ * provenance of a result without holding it in memory.
+ */
+export async function writeJobMeta(
+  jobId: string,
+  meta: Record<string, unknown>
+): Promise<void> {
+  const { dir } = jobDirs(jobId);
+  await fs_promises.writeFile(path.join(dir, JOB_META_FILE), JSON.stringify(meta));
+}
+
+export async function readJobMeta(
+  jobId: string
+): Promise<Record<string, unknown> | null> {
+  const { dir } = jobDirs(jobId);
+  try {
+    const raw = await fs_promises.readFile(path.join(dir, JOB_META_FILE), "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Runs a short-lived python script and returns its single JSON stdout blob. */

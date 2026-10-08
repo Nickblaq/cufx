@@ -1,7 +1,7 @@
 // app/api/op/run/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createJob, startPythonDownload } from "@/lib/jobs";
+import { createJob, startPythonDownload, writeJobMeta } from "@/lib/jobs";
 import { translateOperations } from "@/lib/op/translate";
 
 export const runtime = "nodejs";
@@ -36,6 +36,14 @@ export async function POST(req: NextRequest) {
   try {
     const options = translateOperations(parsed.data.url, parsed.data.operations);
     const jobId = await createJob();
+    // Remember the source so completed outputs can be registered in the
+    // shared catalog with their provenance intact (see lib/op/status.ts).
+    await writeJobMeta(jobId, {
+      kind: "op",
+      url: parsed.data.url,
+      mode: options.mode,
+      operations: parsed.data.operations.map((o) => o.id),
+    });
     startPythonDownload(jobId, JSON.stringify(options));
     return NextResponse.json({ ok: true, jobId });
   } catch (err) {

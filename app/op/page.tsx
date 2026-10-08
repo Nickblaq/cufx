@@ -100,6 +100,7 @@ const TIER_FILTERS = [
 
 type TierFilter = (typeof TIER_FILTERS)[number]["id"];
 
+
 const OPERATIONS: Operation[] = [
   /* ─── Tier 1: Basic ──────────────────────────────────────────────────── */
   {
@@ -1143,6 +1144,7 @@ const OPERATIONS: Operation[] = [
     ],
   },
 ];
+
 
 /* ------------------------------- helpers --------------------------------- */
 

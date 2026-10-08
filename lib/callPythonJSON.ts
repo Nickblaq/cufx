@@ -13,8 +13,7 @@ const execFileAsync = promisify(execFile);
 // lifetime a "download queue" needs here.
 const JOBS_ROOT = path.join(os.tmpdir(), "cufx-jobs");
 
-// Same folder callPython.ts points PYTHONPATH at — pip installs here via
-// `pip install -r requirements.txt --target ./python-modules` at build time.
+// pip installs here via `pip install -r requirements.txt --target ./python-modules` at build time.
 const PYTHON_MODULES_PATH = path.join(process.cwd(), "python-modules");
 
 function pythonEnv() {
@@ -24,7 +23,7 @@ function pythonEnv() {
   };
 }
 
-export function jobDirs(jobId: string) {
+export function callJobDirs(jobId: string) {
   const dir = path.join(JOBS_ROOT, jobId);
   return {
     dir,
@@ -33,7 +32,7 @@ export function jobDirs(jobId: string) {
   };
 }
 
-export async function createJob(): Promise<string> {
+export async function callCreateJob(): Promise<string> {
   const jobId = randomUUID();
   const { dir, outputDir } = jobDirs(jobId);
   await fs_promises.mkdir(outputDir, { recursive: true });
@@ -75,7 +74,7 @@ export async function callPythonJSON<T = unknown>(
  * await completion) and returns immediately. Progress is polled by reading
  * the status file the script writes to, not by watching stdout.
  */
-export function startPythonDownload(jobId: string, optionsJson: string) {
+export function CallStartDownload(jobId: string, optionsJson: string) {
   const { statusFile, outputDir } = jobDirs(jobId);
   const scriptPath = path.join(process.cwd(), "python", "ytdlp_download.py");
 
@@ -110,7 +109,7 @@ export type JobStatus = {
   filename?: string | null;
 };
 
-export async function readJobStatus(jobId: string): Promise<JobStatus | null> {
+export async function callJobStatus(jobId: string): Promise<JobStatus | null> {
   const { statusFile } = jobDirs(jobId);
   try {
     const raw = await fs_promises.readFile(statusFile, "utf8");
@@ -120,11 +119,11 @@ export async function readJobStatus(jobId: string): Promise<JobStatus | null> {
   }
 }
 
-export function jobOutputPath(jobId: string, filename: string) {
+export function callJobOutputPath(jobId: string, filename: string) {
   const { outputDir } = jobDirs(jobId);
   return path.join(outputDir, filename);
 }
 
-export function jobOutputFileExistsSync(jobId: string, filename: string) {
+export function callJobOutputFileExistsSync(jobId: string, filename: string) {
   return fs.existsSync(jobOutputPath(jobId, filename));
 }

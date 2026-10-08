@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readJobStatus } from "@/lib/jobs";
+import { callJobStatus } from "@/lib/jobs";
 
 export async function GET(req: NextRequest) {
   const jobId = req.nextUrl.searchParams.get("jobId");

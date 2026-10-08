@@ -15,6 +15,7 @@ import {
   setObjectDuration,
 } from "@/lib/catalog/store";
 import type { MediaKind } from "@/lib/catalog/types";
+import { sweepExpiredMedia } from "@/lib/cleanup";
 
 export type AssetKind = "video" | "audio" | "image";
 
@@ -88,6 +89,10 @@ export async function saveAsset(
       }
     }
   }
+
+  // An upload is the moment new media appears, so it is also the moment to
+  // drop whatever has expired.
+  void sweepExpiredMedia();
 
   return {
     id: object.id,

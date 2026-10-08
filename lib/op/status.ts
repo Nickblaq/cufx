@@ -4,6 +4,7 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { readJobStatus, jobDirs, jobOutputPath, readJobMeta } from "@/lib/jobs";
 import { ingestFile } from "@/lib/catalog/store";
+import { sweepExpiredMedia } from "@/lib/cleanup";
 
 export type OpJobStatus = "queued" | "running" | "completed" | "failed";
 
@@ -97,6 +98,10 @@ function providerOf(url: string | null): string | null {
 }
 
 export async function getOpJobProgress(jobId: string): Promise<OpJobProgress | null> {
+  // Polling is the heartbeat of a running job, so it is also the natural place
+  // to expire media the server no longer needs.
+  void sweepExpiredMedia();
+
   const raw = await readJobStatus(jobId);
   if (!raw) {
     // Status file not written yet — the Python process just spawned.

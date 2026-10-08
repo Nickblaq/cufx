@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listObjects, getObject, getObjectByHash, ingestObject } from "@/lib/catalog/store";
 import type { MediaKind, ObjectOrigin } from "@/lib/catalog/types";
+import { sweepExpiredMedia } from "@/lib/cleanup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +16,10 @@ const KINDS: MediaKind[] = ["video", "audio", "image", "subtitle", "other"];
 const ORIGINS: ObjectOrigin[] = ["upload", "download", "derived"];
 
 export async function GET(req: NextRequest) {
+  // Expire first, so a listing never shows media that is already on its way
+  // out the door.
+  await sweepExpiredMedia();
+
   const sp = req.nextUrl.searchParams;
 
   const id = sp.get("id");
@@ -74,6 +79,8 @@ export async function POST(req: NextRequest) {
     const origin: ObjectOrigin = ORIGINS.includes(originParam as ObjectOrigin)
       ? (originParam as ObjectOrigin)
       : "upload";
+
+    void sweepExpiredMedia();
 
     const object = await ingestObject({
       data: Buffer.from(await file.arrayBuffer()),

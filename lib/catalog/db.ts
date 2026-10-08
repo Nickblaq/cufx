@@ -2,7 +2,8 @@
 import "server-only";
 import fs from "node:fs";
 import Database from "better-sqlite3";
-import { DATA_DIR, CATALOG_DB_PATH } from "./paths";
+import { CATALOG_DB_PATH } from "./paths";
+import { CATALOG_DIR } from "@/lib/tmp";
 
 export type CatalogDb = Database.Database;
 
@@ -50,7 +51,7 @@ const MIGRATIONS: string[] = [
 export function getCatalogDb(): CatalogDb {
   if (globalForDb.__cufxCatalogDb) return globalForDb.__cufxCatalogDb;
 
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(CATALOG_DIR, { recursive: true });
   const db = new Database(CATALOG_DB_PATH);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");

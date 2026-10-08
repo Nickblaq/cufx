@@ -4,14 +4,9 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import fs_promises from "node:fs/promises";
 import path from "node:path";
-import os from "node:os";
+import { JOBS_DIR } from "@/lib/tmp";
 
 const execFileAsync = promisify(execFile);
-
-// All job state lives under the OS tmp dir, keyed by job id — survives for
-// the lifetime of the single Node process (Railway), which is exactly the
-// lifetime a "download queue" needs here.
-const JOBS_ROOT = path.join(os.tmpdir(), "cufx-jobs");
 
 // Same folder callPython.ts points PYTHONPATH at — pip installs here via
 // `pip install -r requirements.txt --target ./python-modules` at build time.
@@ -24,13 +19,42 @@ function pythonEnv() {
   };
 }
 
+// All job state lives under the shared temp root, keyed by job id — it lasts
+// for the lifetime of the Node process, and is deleted once the job has been
+// idle for MEDIA_TTL_MS, which is exactly the lifetime a "download queue"
+// needs here.
 export function jobDirs(jobId: string) {
-  const dir = path.join(JOBS_ROOT, jobId);
+  const dir = path.join(JOBS_DIR, jobId);
   return {
     dir,
     statusFile: path.join(dir, "status.json"),
     outputDir: path.join(dir, "output"),
   };
+}
+
+/**
+ * Gives a job its own name for a source file that lives in the shared catalog.
+ *
+ * Catalog media expires on a 15-minute idle clock; a long multi-pass encode
+ * would otherwise be reading a file the sweeper deleted between passes. A hard
+ * link is the same bytes under a second name, so the job's own (constantly
+ * refreshed) age governs them instead. Copying is the fallback where linking
+ * isn't available.
+ */
+export async function stageJobInput(
+  jobId: string,
+  sourcePath: string,
+  name: string
+): Promise<string> {
+  const dir = path.join(jobDirs(jobId).dir, "input");
+  await fs_promises.mkdir(dir, { recursive: true });
+  const target = path.join(dir, path.basename(name) || "input");
+  try {
+    await fs_promises.link(sourcePath, target);
+  } catch {
+    await fs_promises.copyFile(sourcePath, target);
+  }
+  return target;
 }
 
 const JOB_META_FILE = "job.json";

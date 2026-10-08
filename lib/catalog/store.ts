@@ -1,13 +1,13 @@
 // lib/catalog/store.ts
 import "server-only";
-import { mkdir, writeFile, stat } from "node:fs/promises";
+import { mkdir, writeFile, stat, readdir, unlink } from "node:fs/promises";
 import { createReadStream, createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { getCatalogDb } from "./db";
 import { sha256, inferKind, resolveExt } from "./blobs";
-import { blobRelPath, resolveBlob } from "./paths";
+import { blobRelPath, resolveBlob, BLOBS_DIR } from "./paths";
 import type {
   CatalogFilter,
   IngestFileInput,
@@ -344,4 +344,67 @@ export function setObjectDuration(id: string, seconds: number): void {
 export function deleteObject(id: string): boolean {
   const res = getCatalogDb().prepare(`DELETE FROM objects WHERE id = ?`).run(id);
   return res.changes > 0;
+}
+
+/* -------------------------------- expiry --------------------------------- */
+
+/**
+ * Deletes catalog objects that have outlived `cutoff` (an epoch ms), along with
+ * their blobs. The row goes first: a record whose bytes are already gone would
+ * surface in the UI as a download that 410s, which is worse than not listing it
+ * at all.
+ */
+export async function purgeExpiredObjects(cutoff: number): Promise<number> {
+  const db = getCatalogDb();
+  const expired = db
+    .prepare(`SELECT id, blob_path FROM objects WHERE updated_at < ?`)
+    .all(cutoff) as { id: string; blob_path: string }[];
+
+  if (expired.length > 0) {
+    const dropEdges = db.prepare(
+      `DELETE FROM edges WHERE child_id = ? OR parent_id = ?`
+    );
+    const dropObject = db.prepare(`DELETE FROM objects WHERE id = ?`);
+    const run = db.transaction((rows: { id: string }[]) => {
+      for (const row of rows) {
+        dropEdges.run(row.id, row.id);
+        dropObject.run(row.id);
+      }
+    });
+    run(expired);
+
+    await Promise.all(
+      expired.map((row) => unlink(resolveBlob(row.blob_path)).catch(() => {}))
+    );
+  }
+
+  await purgeOrphanBlobs(cutoff);
+  return expired.length;
+}
+
+/**
+ * Blob files with no row — the residue of a process that died between writing
+ * bytes and inserting the record — would otherwise sit on disk forever, so
+ * they are swept too. Files younger than the cutoff are left alone: an ingest
+ * that is mid-write has no row yet either.
+ */
+async function purgeOrphanBlobs(cutoff: number): Promise<void> {
+  const known = new Set(
+    (getCatalogDb().prepare(`SELECT blob_path FROM objects`).all() as {
+      blob_path: string;
+    }[]).map((row) => row.blob_path)
+  );
+
+  const shards = await readdir(BLOBS_DIR).catch(() => [] as string[]);
+  for (const shard of shards) {
+    const shardDir = path.join(BLOBS_DIR, shard);
+    const files = await readdir(shardDir).catch(() => [] as string[]);
+    for (const file of files) {
+      const relPath = path.join("blobs", shard, file);
+      if (known.has(relPath)) continue;
+      const info = await stat(path.join(shardDir, file)).catch(() => null);
+      if (!info || info.mtimeMs >= cutoff) continue;
+      await unlink(path.join(shardDir, file)).catch(() => {});
+    }
+  }
 }

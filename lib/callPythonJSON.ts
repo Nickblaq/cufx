@@ -74,7 +74,7 @@ export async function callPythonJSON<T = unknown>(
  * await completion) and returns immediately. Progress is polled by reading
  * the status file the script writes to, not by watching stdout.
  */
-export function CallStartDownload(jobId: string, optionsJson: string) {
+export function callStartDownload(jobId: string, optionsJson: string) {
   const { statusFile, outputDir } = jobDirs(jobId);
   const scriptPath = path.join(process.cwd(), "python", "ytdlp_download.py");
 

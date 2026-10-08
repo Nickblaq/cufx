@@ -79,7 +79,424 @@ const TIER_FILTERS = [
 type TierFilter = (typeof TIER_FILTERS)[number]["id"];
 
 const OPERATIONS: Operation[] = [
-  /* ... paste the full OPERATIONS array from the previous ffmpeg page verbatim ... */
+  {
+    id: "quick-best",
+    name: "Quick Download (Best)",
+    description: "Best video and best audio merged automatically.",
+    tier: 1, category: "download", accepts: "video",
+    icon: Icons.Bolt, favorite: true,
+    params: [],
+  },
+  {
+    id: "audio-mp3",
+    name: "Audio Only (MP3)",
+    description: "Extract audio and convert to MP3.",
+    tier: 1, category: "audio", accepts: "both",
+    icon: Icons.Music, favorite: true,
+    params: [
+      {
+        key: "quality", type: "enum", label: "Quality", default: "0",
+        options: [
+          { value: "0", label: "Best (V0)" },
+          { value: "2", label: "High (V2)" },
+          { value: "5", label: "Medium (V5)" },
+          { value: "9", label: "Low (V9)" },
+          { value: "320K", label: "CBR 320k" },
+          { value: "192K", label: "CBR 192k" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "audio-m4a",
+    name: "Audio Only (M4A)",
+    description: "Extract audio preserving AAC quality.",
+    tier: 1, category: "audio", accepts: "both",
+    icon: Icons.Music,
+    params: [],
+  },
+  {
+    id: "video-mp4",
+    name: "Video (MP4)",
+    description: "Download the best MP4 format available.",
+    tier: 1, category: "video", accepts: "video",
+    icon: Icons.Video,
+    params: [],
+  },
+  {
+    id: "video-webm",
+    name: "Video (WebM)",
+    description: "Download the best WebM format available.",
+    tier: 1, category: "video", accepts: "video",
+    icon: Icons.Video,
+    params: [],
+  },
+  {
+    id: "custom-format",
+    name: "Custom Format String",
+    description: "Pass a raw -f selector for full control.",
+    tier: 1, category: "download", accepts: "both",
+    icon: Icons.Terminal,
+    params: [
+      {
+        key: "format", type: "string", label: "Format Selector",
+        placeholder: "bv*[height<=1080]+ba/b",
+        helpText: "Raw yt-dlp -f value.",
+      },
+    ],
+  },
+  {
+    id: "resolution-cap",
+    name: "Resolution Cap",
+    description: "Best video up to a maximum height.",
+    tier: 2, category: "quality", accepts: "video",
+    icon: Icons.Video, favorite: true,
+    params: [
+      {
+        key: "maxHeight", type: "enum", label: "Max Height", default: "1080",
+        options: [
+          { value: "360", label: "360p" },
+          { value: "480", label: "480p" },
+          { value: "720", label: "720p" },
+          { value: "1080", label: "1080p" },
+          { value: "1440", label: "1440p" },
+          { value: "2160", label: "4K (2160p)" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "filesize-cap",
+    name: "Filesize Cap",
+    description: "Limit download to a maximum size.",
+    tier: 2, category: "quality", accepts: "both",
+    icon: Icons.Archive,
+    params: [
+      { key: "maxSize", type: "integer", label: "Max Size", default: 500, min: 10, max: 10000, unit: "MB" },
+    ],
+  },
+  {
+    id: "codec-pref",
+    name: "Codec Preference",
+    description: "Prefer specific video and audio codecs.",
+    tier: 2, category: "quality", accepts: "video",
+    icon: Icons.Settings,
+    params: [
+      {
+        key: "vcodec", type: "enum", label: "Video Codec", default: "any",
+        options: [
+          { value: "any", label: "Any" },
+          { value: "h264", label: "H.264 (max compatibility)" },
+          { value: "h265", label: "H.265 / HEVC" },
+          { value: "vp9", label: "VP9" },
+          { value: "av01", label: "AV1" },
+        ],
+      },
+      {
+        key: "acodec", type: "enum", label: "Audio Codec", default: "any",
+        options: [
+          { value: "any", label: "Any" },
+          { value: "opus", label: "Opus" },
+          { value: "aac", label: "AAC / M4A" },
+          { value: "mp3", label: "MP3" },
+          { value: "flac", label: "FLAC" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "section-download",
+    name: "Section Download",
+    description: "Download only a time range or chapter.",
+    tier: 2, category: "quality", accepts: "both",
+    icon: Icons.Scissors, favorite: true,
+    params: [
+      {
+        key: "section", type: "string", label: "Section Expression",
+        placeholder: "*05:00-25:00",
+        helpText: "Time range with * prefix, or chapter title regex.",
+      },
+      {
+        key: "forceKeyframes", type: "boolean",
+        label: "Force keyframes at boundaries (slower, cleaner cuts)",
+        default: true,
+      },
+    ],
+  },
+  {
+    id: "rate-limit",
+    name: "Rate Limit",
+    description: "Cap download speed and fragment concurrency.",
+    tier: 2, category: "quality", accepts: "both",
+    icon: Icons.Globe,
+    params: [
+      { key: "rate", type: "string", label: "Max Rate", default: "1M", placeholder: "1M, 500K, 4.2M" },
+      { key: "concurrent", type: "integer", label: "Concurrent Fragments", default: 4, min: 1, max: 32 },
+    ],
+  },
+  {
+    id: "output-template",
+    name: "Output Template",
+    description: "Custom filename pattern using metadata fields.",
+    tier: 3, category: "files", accepts: "both",
+    icon: Icons.Archive,
+    params: [
+      {
+        key: "template", type: "string", label: "Filename Template",
+        default: "%(title)s [%(id)s].%(ext)s",
+        helpText: "Fields: %(title)s %(id)s %(uploader)s %(upload_date)s %(ext)s",
+      },
+      { key: "restrict", type: "boolean", label: "Restrict to ASCII-safe names", default: false },
+    ],
+  },
+  {
+    id: "thumbnail-download",
+    name: "Thumbnail Download",
+    description: "Save the cover image alongside the media.",
+    tier: 3, category: "metadata", accepts: "both",
+    icon: Icons.Image,
+    params: [
+      { key: "all", type: "boolean", label: "Download all thumbnail sizes", default: false },
+      {
+        key: "format", type: "enum", label: "Convert To", default: "jpg",
+        options: [
+          { value: "jpg", label: "JPEG" },
+          { value: "png", label: "PNG" },
+          { value: "webp", label: "WebP" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "info-json",
+    name: "Info JSON Export",
+    description: "Write full metadata to a .info.json file.",
+    tier: 3, category: "metadata", accepts: "both",
+    icon: Icons.Info, favorite: true,
+    params: [
+      { key: "comments", type: "boolean", label: "Include comments (slow)", default: false },
+    ],
+  },
+  {
+    id: "download-archive",
+    name: "Download Archive",
+    description: "Skip already-downloaded items via an archive file.",
+    tier: 3, category: "metadata", accepts: "both",
+    icon: Icons.Archive,
+    params: [
+      { key: "archiveFile", type: "string", label: "Archive File", default: "archive.txt" },
+    ],
+  },
+  {
+    id: "cookies-browser",
+    name: "Cookies from Browser",
+    description: "Load auth cookies from your local browser.",
+    tier: 4, category: "auth", accepts: "both",
+    icon: Icons.Lock, favorite: true,
+    params: [
+      {
+        key: "browser", type: "enum", label: "Browser", default: "chrome",
+        options: [
+          { value: "chrome", label: "Chrome" },
+          { value: "firefox", label: "Firefox" },
+          { value: "edge", label: "Edge" },
+          { value: "brave", label: "Brave" },
+          { value: "safari", label: "Safari" },
+          { value: "chromium", label: "Chromium" },
+          { value: "opera", label: "Opera" },
+          { value: "vivaldi", label: "Vivaldi" },
+        ],
+      },
+      { key: "profile", type: "string", label: "Profile (optional)", placeholder: "Default", advanced: true },
+    ],
+  },
+  {
+    id: "cookies-file",
+    name: "Cookies File",
+    description: "Use a Netscape cookies.txt file.",
+    tier: 4, category: "auth", accepts: "both",
+    icon: Icons.Lock,
+    params: [
+      { key: "cookieFile", type: "string", label: "Path to cookies.txt", placeholder: "/path/cookies.txt" },
+    ],
+  },
+  {
+    id: "proxy-config",
+    name: "Proxy Configuration",
+    description: "Route traffic through a proxy.",
+    tier: 4, category: "auth", accepts: "both",
+    icon: Icons.Globe,
+    params: [
+      { key: "proxy", type: "string", label: "Proxy URL", placeholder: "socks5://127.0.0.1:1080" },
+    ],
+  },
+  {
+    id: "sub-download",
+    name: "Subtitle Download",
+    description: "Download subtitles in chosen languages.",
+    tier: 4, category: "subs", accepts: "video",
+    icon: Icons.Subtitle, favorite: true,
+    params: [
+      { key: "langs", type: "string", label: "Languages", default: "en", placeholder: "en,ja,es or all" },
+      {
+        key: "format", type: "enum", label: "Format", default: "srt",
+        options: [
+          { value: "srt", label: "SRT" },
+          { value: "ass", label: "ASS" },
+          { value: "vtt", label: "VTT" },
+          { value: "lrc", label: "LRC" },
+          { value: "best", label: "Best available" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "embed-subs",
+    name: "Embed Subtitles",
+    description: "Mux subtitles into the media file.",
+    tier: 4, category: "subs", accepts: "video",
+    icon: Icons.Subtitle,
+    params: [
+      { key: "langs", type: "string", label: "Languages", default: "en" },
+    ],
+  },
+  {
+    id: "embed-thumbnail",
+    name: "Embed Thumbnail",
+    description: "Attach the thumbnail as cover art.",
+    tier: 4, category: "metadata", accepts: "both",
+    icon: Icons.Image,
+    params: [],
+  },
+  {
+    id: "embed-metadata",
+    name: "Embed Metadata",
+    description: "Write title, artist, and date tags into the file.",
+    tier: 4, category: "metadata", accepts: "both",
+    icon: Icons.Info,
+    params: [
+      { key: "chapters", type: "boolean", label: "Include chapters", default: true },
+    ],
+  },
+  {
+    id: "music-pipeline",
+    name: "Music Download Pipeline",
+    description: "Extract audio as MP3, embed metadata and cover art.",
+    tier: 5, category: "chain", accepts: "both",
+    icon: Icons.Music, favorite: true,
+    chainSteps: ["audio-mp3", "embed-thumbnail", "embed-metadata"],
+    params: [
+      {
+        key: "quality", type: "enum", label: "Audio Quality", default: "320K",
+        options: [
+          { value: "128K", label: "128 kbps" },
+          { value: "192K", label: "192 kbps" },
+          { value: "256K", label: "256 kbps" },
+          { value: "320K", label: "320 kbps" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "archive-pipeline",
+    name: "Archival Pipeline",
+    description: "Best video plus subs, thumbnail, metadata, and archive tracking.",
+    tier: 5, category: "chain", accepts: "video",
+    icon: Icons.Archive,
+    chainSteps: ["quick-best", "sub-download", "thumbnail-download", "info-json", "download-archive"],
+    params: [
+      { key: "subLangs", type: "string", label: "Subtitle Languages", default: "en" },
+      { key: "archiveFile", type: "string", label: "Archive File", default: "archive.txt" },
+    ],
+  },
+  {
+    id: "social-clip",
+    name: "Social Clip",
+    description: "Cap at 1080p, embed subtitles, quick download.",
+    tier: 5, category: "chain", accepts: "video",
+    icon: Icons.Video,
+    chainSteps: ["resolution-cap", "sub-download", "embed-subs"],
+    params: [
+      { key: "subLangs", type: "string", label: "Subtitle Languages", default: "en" },
+    ],
+  },
+  {
+    id: "sponsorblock-mark",
+    name: "SponsorBlock Mark",
+    description: "Mark sponsor, intro, and outro sections as chapters.",
+    tier: 6, category: "expert", accepts: "video",
+    icon: Icons.Shield,
+    params: [
+      {
+        key: "categories", type: "multiselect", label: "Categories",
+        default: ["sponsor", "intro", "outro"],
+        options: [
+          { value: "sponsor", label: "Sponsor" },
+          { value: "intro", label: "Intro" },
+          { value: "outro", label: "Outro" },
+          { value: "selfpromo", label: "Self-promotion" },
+          { value: "preview", label: "Preview" },
+          { value: "filler", label: "Filler" },
+          { value: "interaction", label: "Interaction reminder" },
+          { value: "music_offtopic", label: "Non-music section" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "sponsorblock-remove",
+    name: "SponsorBlock Remove",
+    description: "Cut sponsor segments from the downloaded file.",
+    tier: 6, category: "expert", accepts: "video",
+    icon: Icons.Shield,
+    params: [
+      {
+        key: "categories", type: "multiselect", label: "Remove Categories",
+        default: ["sponsor"],
+        options: [
+          { value: "sponsor", label: "Sponsor" },
+          { value: "intro", label: "Intro" },
+          { value: "outro", label: "Outro" },
+          { value: "selfpromo", label: "Self-promotion" },
+          { value: "preview", label: "Preview" },
+          { value: "filler", label: "Filler" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "extractor-args",
+    name: "Extractor Arguments",
+    description: "Pass custom args to specific extractors.",
+    tier: 6, category: "expert", accepts: "both",
+    icon: Icons.Terminal,
+    params: [
+      {
+        key: "extractor", type: "enum", label: "Extractor", default: "youtube",
+        options: [
+          { value: "youtube", label: "YouTube" },
+          { value: "generic", label: "Generic" },
+          { value: "tiktok", label: "TikTok" },
+          { value: "twitter", label: "Twitter / X" },
+          { value: "soundcloud", label: "SoundCloud" },
+        ],
+      },
+      { key: "args", type: "string", label: "Arguments", placeholder: "player_client=default,-web" },
+    ],
+  },
+  {
+    id: "split-chapters",
+    name: "Split by Chapters",
+    description: "Split the download into per-chapter files.",
+    tier: 6, category: "expert", accepts: "both",
+    icon: Icons.Flow,
+    params: [
+      {
+        key: "template", type: "string", label: "Chapter Template",
+        default: "%(title)s - %(section_number)02d - %(section_title)s.%(ext)s",
+      },
+    ],
+  },
 ];
 
 /* ------------------------------- helpers --------------------------------- */

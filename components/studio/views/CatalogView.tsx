@@ -1,11 +1,10 @@
 "use client";
 
-import type { Operation } from "@/lib/studio/types";
+import type { CatalogOperation } from "@/lib/studio/types";
+import { TIER_LABELS } from "@/lib/catalog/operations";
 import { Icons } from "../Icons";
 import { OperationCard } from "../OperationCard";
 import { Empty } from "../Empty";
-
-export type TierFilter = string;
 
 export function CatalogView({
   grouped,
@@ -14,17 +13,15 @@ export function CatalogView({
   tierFilters,
   tierFilter,
   setTierFilter,
-  tierLabels,
   onOpenOp,
 }: {
-  grouped: [number, Operation[]][];
+  grouped: [number, CatalogOperation[]][];
   search: string;
   setSearch: (s: string) => void;
   tierFilters: readonly { id: string; label: string }[];
-  tierFilter: TierFilter;
-  setTierFilter: (t: TierFilter) => void;
-  tierLabels: Record<number, string>;
-  onOpenOp: (op: Operation) => void;
+  tierFilter: string;
+  setTierFilter: (t: string) => void;
+  onOpenOp: (op: CatalogOperation) => void;
 }) {
   return (
     <div className="pad">
@@ -42,9 +39,7 @@ export function CatalogView({
           <button
             key={f.id}
             type="button"
-            className={
-              "filterChip" + (tierFilter === f.id ? " filterActive" : "")
-            }
+            className={"filterChip" + (tierFilter === f.id ? " filterActive" : "")}
             onClick={() => setTierFilter(f.id)}
           >
             {f.label}
@@ -62,7 +57,7 @@ export function CatalogView({
       <div className="catalog">
         {grouped.map(([tier, ops]) => (
           <section key={tier} className="tierSection">
-            <h3 className="tierHead">{tierLabels[tier] ?? `Tier ${tier}`}</h3>
+            <h3 className="tierHead">{TIER_LABELS[tier] ?? `Tier ${tier}`}</h3>
             <ul className="opList">
               {ops.map((op) => (
                 <li key={op.id}>

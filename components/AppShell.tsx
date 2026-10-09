@@ -3,14 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+// The old shell listed every half-finished experiment (editor, extract, edit,
+// op, yt, design, test). There is one product now — the catalog studio — so the
+// nav is just the landing page and the single entry point into it.
 const NAV_ITEMS = [
-  { href: "/editor", label: "editor" },
-  { href: "/extract", label: "extract" },
-  { href: "/edit", label: "edit" },
-  { href: "/op", label: "op" },
-  { href: "/yt", label: "yt" },
-  { href: "/design", label: "design" },
-  { href: "/test", label: "test" },
+  { href: "/", label: "home" },
+  { href: "/cufx", label: "cufx" },
 ] as const;
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -22,10 +20,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <Link href="/" className="wordmark" aria-label="cufx home">
           cufx
         </Link>
+        <span className="wordmarkSub">operation catalog</span>
         <nav className="nav" aria-label="Primary">
           {NAV_ITEMS.map((item) => {
             const active =
-              pathname === item.href || pathname.startsWith(`${item.href}/`);
+              item.href === "/"
+                ? pathname === "/"
+                : pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}
@@ -43,14 +44,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <main className="shellMain">{children}</main>
 
       <footer className="footer">
-        <span>Next.js · ffmpeg · sharp · yt-dlp</span>
+        <span>Next.js · ffmpeg · sharp · yt-dlp · SQLite catalog</span>
       </footer>
 
       <style jsx>{`
         .topbar {
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 8px;
           padding: 20px 0 8px;
           flex-wrap: nowrap;
         }
@@ -64,6 +65,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         }
         .wordmark:hover {
           text-decoration: none;
+        }
+        .wordmarkSub {
+          font-family: var(--font-mono), monospace;
+          font-size: 10.5px;
+          color: var(--ink-soft);
+          padding-left: 8px;
+          border-left: 1px solid var(--border);
+          flex-shrink: 0;
         }
 
         .nav {

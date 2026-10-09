@@ -1,12 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: [
-    "@resvg/resvg-js",
-    // Native module — the local catalog's SQLite store.
-    "better-sqlite3",
-    // Add other native modules you use in server routes here:
-    // "sharp",
-  ],
+  // Native modules must stay external to the server bundle: the catalog's
+  // SQLite handle (better-sqlite3) is a .node addon and cannot be bundled.
+  serverExternalPackages: ["better-sqlite3"],
 };
 
 module.exports = nextConfig;

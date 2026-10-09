@@ -1,28 +1,57 @@
-# Real photo editor — what's in this drop
+# cufx — one shared operation catalog
 
-Three files, drop into the matching paths in the repo (they replace what's there now, `package.json` just needs the `sharp` dependency merged in if you don't overwrite it wholesale):
+cufx is a media pipeline with a single catalog at its center. Upload a file or
+paste a URL; every operation is a step that reads the previous step's result
+from the catalog and writes a new catalog object. Chained jobs run entirely on
+the server — nothing is re-uploaded between steps.
 
-- `app/editor/page.tsx`
-- `app/api/photo/process/route.ts` (new)
-- `package.json` (adds `"sharp"` as a dependency — run `npm install` after)
+The single entry point is **`/cufx`**. `/op` and `/yt` (two apps with two copies
+of `OPERATIONS` and two translate modules) are gone.
 
-## What's real now (photo only — video tab is untouched, still the mockup)
+## How it fits together
 
-- **Upload** — real `<input type="file">`, no more placeholder gradient.
-- **Live preview** — the uploaded image is drawn into a `<canvas>`; brightness/contrast/saturation/hue/LUT adjustments apply as a CSS `filter` directly on the canvas element, so sliders stay smooth (GPU-composited, no per-frame redraw).
-- **Crop** — the aspect-preset buttons (Free/1:1/4:5/16:9/9:16) compute a real crop box sized to that ratio; drag it to pan. The preview container now sizes itself to the photo's real aspect ratio so the crop overlay's percentage-based position lines up exactly with the canvas pixels underneath it.
-- **Text** — there's now an actual input to type a caption (the mockup only ever showed the hardcoded string "Your caption"); size/align controls now affect something real.
-- **Export** — sends the original file + a JSON description of every adjustment to `/api/photo/process`, which runs a real `sharp` pipeline (crop → brightness/saturation/hue via `modulate()` → contrast via a `linear()` transform → optional `sharpen()` → optional SVG text composite → format/quality encode) and returns the processed image. The UI then shows a real download link and the *actual* output file size (replacing the old formula-based size estimate once you've exported).
+```
+lib/catalog/
+  types.ts        MediaObject — the one data model (uploads, downloads, derivations)
+  operations.ts   THE operation catalog: accepts / produces / params per operation
+  engines.ts      the one job builder (ffmpeg passes + yt-dlp options)
+  db.ts           SQLite: objects/edges + jobs/runs/steps
+  store.ts        content-addressed blob store, streaming ingest, hash dedupe
+  jobs.ts         SQLite-backed runner — chains steps by catalog id
+app/api/
+  catalog/        list · filter · get · ingest · download · delete
+  jobs/           start · poll · retry
+app/cufx/         the studio (source → catalog → pipeline → run → result)
+```
 
-## Two correctness bugs I caught and fixed during review (not just written-and-shipped)
+### Catalog ids everywhere
 
-1. **Preview/crop-overlay misalignment**: I'd initially sized the preview container to the *target crop ratio* while showing the *full* image inside it — two different aspect ratios in the same box, which would've made the drag-to-crop box line up with the wrong region. Fixed by sizing the preview to the photo's real aspect ratio instead.
-2. **Caption text size mismatch on export**: the font-size slider is a CSS px value sized for the on-screen preview (which might render at ~350px wide), but exported images can be thousands of pixels wide — sending that raw number to `sharp` would've produced an illegibly tiny caption. Fixed by scaling the font size by (export width ÷ actual displayed preview width) at export time, so the caption comes out the same proportional size you saw in the preview.
+- Run and result views work with **object ids**, not job-relative filenames.
+- **Save to device** exports straight from the catalog (`/api/catalog/:id?download=1`).
+- **Chaining** links a step to the previous step's result, e.g.
+  `URL → download → trim → crop`. The runner threads each step's
+  `output_object_id` into the next step's input.
 
-## Tested, not just written
+### Job state in SQLite
 
-I don't have a browser in this environment, so I couldn't click through the UI — but I ran the actual `sharp` pipeline (crop, modulate, contrast, sharpen, SVG text composite, and all four output formats) against real generated test images before wiring it to the route, including edge cases like an out-of-bounds crop rect (confirmed it clamps instead of throwing). `npx tsc --noEmit` is clean on both files (the two remaining `style jsx` warnings are pre-existing in the original repo, unrelated to this change — confirmed via `git stash` earlier in this conversation).
+`jobs`, `runs`, and `steps` tables replace the old per-job `status.json`
+polling. A job is the request, a run is one attempt (retry-safe: a failed run is
+kept and a new one appended), and a step's `output_object_id` is the catalog
+link the next step consumes.
 
-## Known trade-off, stated up front
+### Pipeline undo/redo
 
-Live adjustment preview uses the canvas element's CSS `filter`, not a custom WebGL shader. This is a deliberate choice (discussed and agreed before building): it's real-time and GPU-accelerated, and `sharp` is still the source of truth for the final pixels on export — WebGL would only be needed for effects CSS `filter` can't express (custom LUTs, split-toning), which nothing in the current tool set requires yet.
+The client pipeline lives in a `zustand` store with a `zundo` history — undo and
+redo only affect the pipeline. `dexie` is gone: the server's SQLite catalog is
+the source of truth.
+
+## Working data
+
+Everything cufx writes lives under `.cufx-data/` at the project root (gitignored)
+and is disposable — catalog objects are swept once idle.
+
+## Requirements
+
+- Node 22+
+- `ffmpeg` / `ffprobe` on `PATH` (processing)
+- `python3` + `pip install -r requirements.txt` (yt-dlp downloads)

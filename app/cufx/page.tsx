@@ -29,11 +29,23 @@ import type {
   Job,
   MediaKind,
   MediaObject,
+  MediaProfile,
+  Option,
+  Param,
   PipelineStep,
   StudioSource,
   View,
 } from "@/lib/studio/types";
-import { defaultValues, evalCondition, formatBytes, formatDuration } from "@/lib/studio/helpers";
+import {
+  defaultValues,
+  dynamicOptions,
+  evalCondition,
+  formatBytes,
+  formatCount,
+  formatDate,
+  formatDuration,
+  pipelineOutputKind,
+} from "@/lib/studio/helpers";
 import { studioApi } from "@/lib/studio/api";
 import { useStudioStore, useUndoRedo } from "@/lib/studio/store";
 import { Icons } from "@/components/studio/Icons";
@@ -47,6 +59,7 @@ import { PipelineView } from "@/components/studio/views/PipelineView";
 import { RunView } from "@/components/studio/views/RunView";
 import { ResultView } from "@/components/studio/views/ResultView";
 import { AssetsView } from "@/components/studio/views/AssetsView";
+import { MediaDetail } from "@/components/studio/MediaDetail";
 
 const HEADER_TITLES: Record<View, string> = {
   source: "New Pipeline",
@@ -73,7 +86,15 @@ export default function CufxPage() {
   const moveStep = useStudioStore((s) => s.moveStep);
   const updateStep = useStudioStore((s) => s.updateStep);
   const clearPipeline = useStudioStore((s) => s.clearPipeline);
+  const profile = useStudioStore((s) => s.profile);
+  const setProfile = useStudioStore((s) => s.setProfile);
   const { undo, redo, canUndo, canRedo } = useUndoRedo();
+
+  const [resolveState, setResolveState] = useState<
+    "idle" | "resolving" | "ok" | "error"
+  >("idle");
+  const [resolveError, setResolveError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<MediaObject | null>(null);
 
   const [sheet, setSheet] = useState<null | "configure">(null);
   const [editingUid, setEditingUid] = useState<string | null>(null);
@@ -261,12 +282,37 @@ export default function CufxPage() {
     [handleUpload]
   );
 
+  /* -------------------------------- resolve ------------------------------ */
+
+  /**
+   * Describe the link before anything is downloaded. The result is what makes
+   * the download forms honest: real resolutions, real audio formats, real
+   * caption languages — and a preview of the media the user is about to work
+   * on instead of a list of dummy defaults.
+   */
+  const resolveLink = useCallback(
+    async (url: string) => {
+      setResolveState("resolving");
+      setResolveError(null);
+      setProfile(null);
+      try {
+        setProfile(await studioApi.resolve(url));
+        setResolveState("ok");
+      } catch (err) {
+        setResolveError(err instanceof Error ? err.message : "Could not read that link");
+        setResolveState("error");
+      }
+    },
+    [setProfile]
+  );
+
   function applyUrl() {
     const url = urlDraft.trim();
     if (!url) return;
     setSource({ url, objectId: null, name: null, kind: null, sizeBytes: null });
     clearPipeline();
     setView("catalog");
+    void resolveLink(url);
   }
 
   function pickObject(object: MediaObject) {
@@ -277,6 +323,8 @@ export default function CufxPage() {
       sizeBytes: object.sizeBytes,
       url: null,
     });
+    setProfile(null);
+    setResolveState("idle");
     clearPipeline();
     setView("pipeline");
   }
@@ -290,16 +338,30 @@ export default function CufxPage() {
   // download step. Until then only downloads can run; as soon as one exists its
   // `produces` kind unlocks the ffmpeg operations that consume it — this is
   // what makes `URL → download → trim → crop` chainable in one pipeline.
-  const downloadKind = useMemo<MediaKind | null>(() => {
-    if (!hasUrl) return null;
-    for (let i = pipeline.length - 1; i >= 0; i--) {
-      const op = getOperation(pipeline[i].opId);
+  //
+  // Once there is more than one step the seed is not enough: a step changes the
+  // kind (extract audio, extract frame) so the whole chain is walked to work out
+  // what the *next* step will actually receive.
+  const seedKind = useMemo<MediaKind | null>(() => {
+    if (sourceKind) return sourceKind;
+    for (const step of pipeline) {
+      const op = getOperation(step.opId);
       if (op?.engine === "ytdlp") return op.produces;
     }
     return null;
-  }, [hasUrl, pipeline]);
+  }, [sourceKind, pipeline]);
 
-  const effectiveKind: MediaKind | null = sourceKind ?? downloadKind;
+  const effectiveKind = useMemo<MediaKind | null>(() => {
+    if (!seedKind) return null;
+    let start = 0;
+    if (!sourceKind) {
+      // Leading download steps are already folded into the seed.
+      while (start < pipeline.length && getOperation(pipeline[start].opId)?.engine === "ytdlp") {
+        start++;
+      }
+    }
+    return pipelineOutputKind(seedKind, pipeline.slice(start));
+  }, [seedKind, sourceKind, pipeline]);
 
   const visibleOps = useMemo(() => {
     const [lo, hi] = TIER_RANGES[tierFilter];
@@ -491,6 +553,71 @@ export default function CufxPage() {
               </button>
             </section>
 
+            {source.url && !source.objectId && resolveState !== "idle" && (
+              <section className="card profileCard">
+                <div className="urlHead">
+                  <Icons.Info size={14} /> <span>Link preview</span>
+                </div>
+
+                {resolveState === "resolving" && (
+                  <p className="fieldHelp">
+                    Reading what this link actually contains…
+                  </p>
+                )}
+
+                {resolveState === "error" && (
+                  <div className="errorBox">
+                    <Icons.Warn /> {resolveError}
+                  </div>
+                )}
+
+                {resolveState === "ok" && profile && (
+                  <div className="mediaCard">
+                    <div className="mediaThumb">
+                      {profile.thumbnail ? (
+                        <img
+                          src={profile.thumbnail}
+                          alt=""
+                          className="mediaThumbImg"
+                        />
+                      ) : (
+                        <Icons.Video size={28} />
+                      )}
+                      {profile.durationSeconds ? (
+                        <span className="mediaDuration">
+                          {formatDuration(profile.durationSeconds)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mediaMeta">
+                      <span className="mediaTitle">{profile.title ?? source.url}</span>
+                      <span className="mediaSub">
+                        {[profile.uploader, profile.extractor]
+                          .filter(Boolean)
+                          .join(" · ") || source.url}
+                      </span>
+                      <span className="mediaStats">
+                        {profile.heights.length
+                          ? `${profile.heights[0]}p max`
+                          : profile.audioFormats.length
+                            ? profile.audioFormats.join("/").toUpperCase()
+                            : "audio"}{" "}
+                        · {profile.formats.length} formats ·{" "}
+                        {profile.subtitleLangs.length} caption
+                        {profile.subtitleLangs.length === 1 ? "" : "s"}
+                        {profile.viewCount
+                          ? ` · ${formatCount(profile.viewCount)} views`
+                          : ""}
+                        {profile.uploadDate
+                          ? ` · ${formatDate(profile.uploadDate)}`
+                          : ""}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+
             {source.objectId && source.name && (
               <section className="card assetCard" onClick={() => setView("pipeline")}>
                 <div className="assetIcon">
@@ -580,6 +707,7 @@ export default function CufxPage() {
             kind={assetKind}
             setKind={setAssetKind}
             onUse={pickObject}
+            onInspect={setDetail}
             onDownload={saveObject}
             onDelete={deleteAsset}
             onRefresh={() => void loadAssets()}
@@ -593,6 +721,22 @@ export default function CufxPage() {
               <div className="pad">
                 <div className="errorBox">
                   <Icons.Warn /> Pick a source first.
+                </div>
+              </div>
+            )}
+            {source.url && profile && (
+              <div className="pad">
+                <div className="profileStrip">
+                  <Icons.Globe size={14} />
+                  <span className="profileStripName">
+                    {profile.title ?? source.url}
+                  </span>
+                  <span className="profileStripMeta">
+                    {profile.heights.length
+                      ? `${profile.heights[0]}p`
+                      : "audio"}{" "}
+                    · {profile.subtitleLangs.length} subs
+                  </span>
                 </div>
               </div>
             )}
@@ -663,6 +807,7 @@ export default function CufxPage() {
               setView("pipeline");
             }}
             onHome={resetAll}
+            onInspect={setDetail}
             onChain={chainFrom}
             onRetry={() => {
               if (!jobId) return;
@@ -711,6 +856,25 @@ export default function CufxPage() {
         accept="video/*,audio/*,image/*"
       />
 
+      {detail && (
+        <MediaDetail
+          object={detail}
+          streamUrl={studioApi.streamUrl}
+          downloadUrl={studioApi.downloadUrl}
+          onClose={() => setDetail(null)}
+          onUse={(object) => {
+            setDetail(null);
+            pickObject(object);
+          }}
+          onSave={saveObject}
+          onDelete={(object) => {
+            setDetail(null);
+            void deleteAsset(object);
+          }}
+          busy={deletingId === detail.id}
+        />
+      )}
+
       {sheet === "configure" && selectedOp && (
         <ConfigureSheet
           op={selectedOp}
@@ -723,6 +887,7 @@ export default function CufxPage() {
           }}
           onAdd={commitStep}
           editing={Boolean(editingUid)}
+          profile={profile}
         />
       )}
     </div>
@@ -738,6 +903,7 @@ function ConfigureSheet({
   onClose,
   onAdd,
   editing,
+  profile,
 }: {
   op: CatalogOperation;
   values: FormValues;
@@ -745,6 +911,8 @@ function ConfigureSheet({
   onClose: () => void;
   onAdd: () => void;
   editing: boolean;
+  /** Resolved URL profile — used to fill `dynamic` params with real options. */
+  profile: MediaProfile | null;
 }) {
   const visible = useMemo(
     () => op.params.filter((p) => evalCondition(p.showIf, values)),
@@ -761,6 +929,48 @@ function ConfigureSheet({
     }
     return Array.from(m.entries());
   }, [visible]);
+
+  /* `object` params (concat partner, overlay image, subtitle file) pick a second
+     catalog object, so the real catalog is loaded and filtered per param. */
+  const needsObjects = op.params.some((p) => p.type === "object");
+  const [objects, setObjects] = useState<MediaObject[]>([]);
+
+  useEffect(() => {
+    if (!needsObjects) return;
+    let cancelled = false;
+    void studioApi
+      .listObjects({ limit: 200 })
+      .then((list) => {
+        if (!cancelled) setObjects(list);
+      })
+      .catch(() => {
+        if (!cancelled) setObjects([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsObjects]);
+
+  /** Swap a param's static options for the real ones when a link is resolved. */
+  const resolveParam = (p: Param): Param =>
+    p.dynamic
+      ? { ...p, options: dynamicOptions(p.dynamic, p.options ?? [], profile) }
+      : p;
+
+  const objectOptionsFor = (p: Param): Option[] =>
+    objects
+      .filter((o) => !p.accepts?.length || p.accepts.includes(o.kind))
+      .map((o) => ({
+        value: o.id,
+        label: `${o.name} · ${o.kind} · ${formatBytes(o.sizeBytes)}`,
+      }));
+
+  // A step that needs a second object (concat partner, overlay image, subtitle
+  // file) can't be added until one is picked — otherwise the job would only
+  // fail later, on the server.
+  const missingRequired = op.params.some(
+    (p) => p.type === "object" && p.required && !String(values[p.key] ?? "").trim()
+  );
 
   return (
     <Sheet
@@ -783,20 +993,29 @@ function ConfigureSheet({
       {groups.map(([group, params]) => (
         <div key={group} className="fieldGroup">
           <div className="groupLabel">{group}</div>
-          {params.map((p) => (
-            <Field
-              key={p.key}
-              param={p}
-              value={values[p.key]}
-              onChange={(v) => setValue(p.key, v)}
-            />
-          ))}
+          {params.map((raw) => {
+            const p = resolveParam(raw);
+            return (
+              <Field
+                key={p.key}
+                param={p}
+                value={values[p.key]}
+                onChange={(v) => setValue(p.key, v)}
+                objectOptions={
+                  p.type === "object" ? objectOptionsFor(p) : undefined
+                }
+              />
+            );
+          })}
         </div>
       ))}
 
-      <button type="button" className="primaryBtn" onClick={onAdd}>
+      <button type="button" className="primaryBtn" onClick={onAdd} disabled={missingRequired}>
         <Icons.Plus /> {editing ? "Update Step" : "Add to Pipeline"}
       </button>
+      {missingRequired && (
+        <p className="fieldHelp">Pick the media to combine with this operation first.</p>
+      )}
     </Sheet>
   );
 }

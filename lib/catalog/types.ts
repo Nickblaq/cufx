@@ -76,3 +76,62 @@ export type CatalogFilter = {
   search?: string;
   limit?: number;
 };
+
+/* ------------------------------ URL profiles ------------------------------ */
+
+/** One downloadable stream reported by the extractor. */
+export type MediaFormat = {
+  /** yt-dlp format id, e.g. "137" or "sb1". */
+  formatId: string;
+  ext: string | null;
+  /** Video, audio, image (thumbnail/subtitle streams are grouped under other). */
+  kind: MediaKind;
+  height: number | null;
+  width: number | null;
+  fps: number | null;
+  vcodec: string | null;
+  acodec: string | null;
+  filesize: number | null;
+  /** Total bitrate in kbps. */
+  tbr: number | null;
+  /** Audio bitrate in kbps. */
+  abr: number | null;
+  /** Free-form label the extractor attached to the stream. */
+  note: string | null;
+};
+
+/** A caption track offered by a URL. */
+export type SubtitleTrack = {
+  code: string;
+  name: string;
+  /** True when this is an auto-generated (ASR) caption. */
+  auto: boolean;
+};
+
+/**
+ * Everything the studio needs to describe a URL *before* downloading it.
+ * Trimming the raw extractor dict down to this is what keeps the operation
+ * forms honest: resolutions, audio formats, and caption languages are the
+ * ones the link actually has.
+ */
+export type MediaProfile = {
+  url: string;
+  id: string | null;
+  title: string | null;
+  uploader: string | null;
+  channel: string | null;
+  durationSeconds: number | null;
+  thumbnail: string | null;
+  extractor: string | null;
+  webpageUrl: string | null;
+  description: string | null;
+  viewCount: number | null;
+  uploadDate: string | null;
+  live: boolean;
+  formats: MediaFormat[];
+  /** Distinct video heights, highest first. */
+  heights: number[];
+  /** Distinct audio-only extensions. */
+  audioFormats: string[];
+  subtitleLangs: SubtitleTrack[];
+};

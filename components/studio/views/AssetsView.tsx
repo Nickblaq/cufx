@@ -35,6 +35,7 @@ export function AssetsView({
   kind,
   setKind,
   onUse,
+  onInspect,
   onDownload,
   onDelete,
   onRefresh,
@@ -48,6 +49,8 @@ export function AssetsView({
   kind: MediaKind | "all";
   setKind: (k: MediaKind | "all") => void;
   onUse: (object: MediaObject) => void;
+  /** Clicking the file itself previews it instead of jumping into a pipeline. */
+  onInspect: (object: MediaObject) => void;
   onDownload: (object: MediaObject) => void;
   onDelete: (object: MediaObject) => void;
   onRefresh: () => void;
@@ -109,8 +112,8 @@ export function AssetsView({
                 <button
                   type="button"
                   className="assetMeta assetMetaBtn"
-                  onClick={() => onUse(object)}
-                  title="Use as the source of a new pipeline"
+                  onClick={() => onInspect(object)}
+                  title="Preview this asset"
                 >
                   <span className="assetName">{object.name}</span>
                   <span className="assetInfo">
@@ -127,6 +130,7 @@ export function AssetsView({
                     className="iconAction"
                     onClick={() => onUse(object)}
                     aria-label="Use for operations"
+                    title="Use as the source of a new pipeline"
                   >
                     <Icons.Flow size={16} />
                   </button>

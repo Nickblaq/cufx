@@ -7,7 +7,13 @@
 // (or a URL), and outputs are objects again — so "save to device" is just a
 // download of a catalog id, and chaining is a link between two ids.
 
-import type { FormValues, Job, MediaKind, MediaObject } from "./types";
+import type {
+  FormValues,
+  Job,
+  MediaKind,
+  MediaObject,
+  MediaProfile,
+} from "./types";
 
 export type CatalogFilter = {
   kind?: MediaKind;
@@ -104,4 +110,23 @@ export const studioApi = {
 
   /** Save-to-device / chaining target: stream an object out of the catalog. */
   downloadUrl: (id: string) => `/api/catalog/${encodeURIComponent(id)}?download=1`,
+
+  /** Inline playback/stream URL (no Content-Disposition attachment). */
+  streamUrl: (id: string) => `/api/catalog/${encodeURIComponent(id)}`,
+
+  /**
+   * Describe a URL before downloading it: title, thumbnail, real resolutions,
+   * real audio formats, real caption languages.
+   */
+  async resolve(url: string): Promise<MediaProfile> {
+    const res = await fetch(
+      `/api/resolve?url=${encodeURIComponent(url)}`,
+      { cache: "no-store" }
+    );
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || "Could not read that link");
+    }
+    return data.profile as MediaProfile;
+  },
 };

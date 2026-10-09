@@ -16,7 +16,13 @@ import { randomUUID } from "node:crypto";
 import { getCatalogDb } from "./db";
 import { JOBS_DIR } from "@/lib/tmp";
 import { getOperation, type FormValues } from "./operations";
-import { buildObjectStep, buildYtdlpOptions } from "./engines";
+import {
+  buildObjectStep,
+  buildYtdlpOptions,
+  type EngineInput,
+  type FfmpegStep,
+  type FfprobeStep,
+} from "./engines";
 import { extFromName, mimeForExt } from "./blobs";
 import {
   getStoredObject,
@@ -305,17 +311,106 @@ function jobWorkDir(jobId: string): string {
   return path.join(JOBS_DIR, jobId);
 }
 
-/** Hard-link (or copy) a catalog blob into the job's scratch dir. */
-async function stageInput(jobId: string, sourcePath: string, name: string): Promise<string> {
+/**
+ * Hard-link (or copy) a catalog blob into the job's scratch dir.
+ *
+ * `key` prefixes the staged filename so several inputs that happen to share a
+ * basename (the pipeline input and an extra object, say) never collide.
+ */
+async function stageInput(
+  jobId: string,
+  sourcePath: string,
+  name: string,
+  key?: string
+): Promise<string> {
   const dir = path.join(jobWorkDir(jobId), "input");
   await fsp.mkdir(dir, { recursive: true });
-  const target = path.join(dir, path.basename(name) || "input");
+  const base = path.basename(name) || "input";
+  const target = path.join(dir, key ? `${key}-${base}` : base);
   try {
     await fsp.link(sourcePath, target);
   } catch {
     await fsp.copyFile(sourcePath, target);
   }
   return target;
+}
+
+/**
+ * Collect the extra catalog objects an operation pulls in (its `object`
+ * params) and stage them alongside the pipeline input. A missing or unresolvable
+ * reference fails the step with a message the user can act on.
+ */
+async function collectExtras(
+  jobId: string,
+  step: StepRow,
+  opId: string
+): Promise<EngineInput[]> {
+  const op = getOperation(opId);
+  if (!op) return [];
+  const params = parseParams(step.params_json);
+  const extras: EngineInput[] = [];
+
+  let index = 0;
+  for (const p of op.params) {
+    if (p.type !== "object") continue;
+    const objectId = s(params[p.key]);
+    if (!objectId) {
+      if (p.required) throw new Error(`${op.name} needs a ${p.label.toLowerCase()} selected.`);
+      continue;
+    }
+    const stored = getStoredObject(objectId);
+    const filePath = stored ? objectFilePath(objectId) : null;
+    if (!stored || !filePath || !fs.existsSync(filePath)) {
+      throw new Error(
+        `${op.name}: the selected ${p.label.toLowerCase()} is no longer available on the server.`
+      );
+    }
+    index += 1;
+    extras.push({
+      path: await stageInput(jobId, filePath, stored.name, `x${index}`),
+      kind: stored.kind,
+      name: stored.name,
+    });
+  }
+  return extras;
+}
+
+/**
+ * Run ffprobe once and write its JSON report where the step expects it. The
+ * runner never treats this output as media — it lands in the catalog as an
+ * `other` object so it can be downloaded like anything else.
+ */
+async function runFfprobe(step: StepRow, spec: FfprobeStep): Promise<void> {
+  updateStep(step.id, { status: "running", percent: 10 });
+  const json = await new Promise<string>((resolve, reject) => {
+    const child = spawn("ffprobe", spec.args, { stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      out += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr = (stderr + chunk.toString()).slice(-4000);
+    });
+    child.on("error", (err: NodeJS.ErrnoException) => {
+      reject(
+        err.code === "ENOENT"
+          ? new Error("ffprobe is not installed on the server")
+          : err
+      );
+    });
+    child.on("close", (code) => {
+      if (code === 0) resolve(out);
+      else reject(new Error(stderr.trim() || `ffprobe exited with code ${code}`));
+    });
+  });
+
+  await fsp.writeFile(spec.outputPath, json, "utf8");
+  updateStep(step.id, { status: "running", percent: 80 });
+}
+
+function s(v: unknown): string {
+  return v == null ? "" : String(v).trim();
 }
 
 function providerOf(url: string | null): string | null {
@@ -462,6 +557,11 @@ async function registerDownloadOutputs(
   const provider = providerOf(url);
   let primary: MediaObject | null = null;
   let primarySize = -1;
+  // A subtitles-only download produces no media at all, so keep the largest
+  // non-media object as a fallback — otherwise "Download Subtitles" on its own
+  // would report "Download produced no media" despite having worked.
+  let fallback: MediaObject | null = null;
+  let fallbackSize = -1;
 
   for (const name of entries) {
     const full = path.join(outputDir, name);
@@ -485,6 +585,10 @@ async function registerDownloadOutputs(
         primary = object;
         primarySize = size;
       }
+      if (size > fallbackSize) {
+        fallback = object;
+        fallbackSize = size;
+      }
     } catch (err) {
       // Bookkeeping must never fail the job the user is watching.
       console.error(`[jobs] register ${name} for ${jobId} failed:`, err);
@@ -492,7 +596,7 @@ async function registerDownloadOutputs(
   }
 
   void sweepExpiredMedia();
-  return primary?.id ?? null;
+  return (primary ?? fallback)?.id ?? null;
 }
 
 function slug(name: string): string {
@@ -627,15 +731,26 @@ async function executeRun(jobId: string, runId: string): Promise<void> {
     }
 
     const outBase = path.join(outputDir, `${String(step.seq + 1).padStart(2, "0")}-${slug(stored.name)}`);
-    const spec = buildObjectStep(
-      step.op_id,
-      parseParams(step.params_json),
-      { path: staged, kind: stored.kind, name: stored.name },
-      outBase
-    );
 
+    let spec: FfmpegStep | FfprobeStep;
     try {
-      if (spec.engine === "ffmpeg") {
+      const extras = await collectExtras(jobId, step, step.op_id);
+      spec = buildObjectStep(
+        step.op_id,
+        parseParams(step.params_json),
+        {
+          path: staged,
+          kind: stored.kind,
+          name: stored.name,
+          durationSeconds: stored.durationSeconds,
+        },
+        outBase,
+        extras
+      );
+
+      if (spec.engine === "ffprobe") {
+        await runFfprobe(step, spec);
+      } else if (spec.engine === "ffmpeg") {
         if (spec.passes.length === 0) {
           throw new Error(`Operation ${step.op_id} has no ffmpeg passes`);
         }
@@ -663,8 +778,11 @@ async function executeRun(jobId: string, runId: string): Promise<void> {
       produced = await ingestFile({
         path: producedPath,
         name: spec.outputName,
+        // The engine already knows what it produced (an image is an image, a
+        // probe is an `other` object), so kind is not left to extension guessing.
+        kind: spec.outputKind,
         origin: "derived",
-        tool: "ffmpeg",
+        tool: spec.engine === "ffprobe" ? "ffprobe" : "ffmpeg",
         parents: [current],
         meta: { jobId, opId: step.op_id },
       });

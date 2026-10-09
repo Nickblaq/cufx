@@ -176,6 +176,8 @@ export const STUDIO_STYLES = `
 .outputRow{display:flex;align-items:center;gap:10px;padding:12px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);text-decoration:none;color:var(--ink);font-family:inherit}
 .outputRow:hover{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .outputName{flex:1;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.outputNameBtn{flex:1;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;background:transparent;border:none;padding:0;cursor:pointer;font-family:inherit;color:inherit}
+.outputNameBtn:hover{color:var(--accent)}
 .outputSize{font-size:11.5px;color:var(--ink-mute);font-family:var(--font-mono)}
 .resultActions{display:flex;flex-direction:column;gap:8px}
 
@@ -233,6 +235,25 @@ textarea{resize:vertical;font-family:var(--font-mono);font-size:12.5px}
 .historyRow{display:flex;gap:8px;justify-content:flex-end}
 .recentList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .recentRow{width:100%;text-align:left;font-family:inherit;border-radius:var(--radius-lg)}
+
+/* Link preview + media detail ---------------------------------------------- */
+.mediaThumbImg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.profileCard{display:flex;flex-direction:column;gap:10px}
+.profileDesc{font-size:12px;color:var(--ink-soft);line-height:1.5;margin:0;max-height:74px;overflow:hidden}
+.profileStrip{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:var(--radius);background:var(--accent-soft);color:var(--accent);font-size:12.5px;overflow:hidden}
+.profileStrip>svg{flex-shrink:0}
+.profileStripName{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.profileStripMeta{font-family:var(--font-mono);font-size:11px;white-space:nowrap;flex-shrink:0}
+
+.detailMedia{display:flex;flex-direction:column;gap:10px}
+.player{width:100%;max-height:320px;border-radius:12px;background:#0e0f11;object-fit:contain;display:block}
+.playerWrap{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:18px 14px;display:flex;justify-content:center}
+.playerWrapAudio .player{background:transparent;max-height:none}
+.subPreview{margin:0;padding:12px;font-family:var(--font-mono);font-size:11.5px;line-height:1.55;color:var(--ink-soft);background:var(--surface-2);border:1px solid var(--border);border-radius:12px;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+.detailActions{display:flex;flex-direction:column;gap:8px}
+.ghostBtnDanger{color:var(--danger)}
+.ghostBtnDanger:hover{background:var(--danger-soft);border-color:var(--danger)}
+.objectEmpty{font-size:12px;color:var(--ink-soft);line-height:1.5;margin:0;padding:10px 12px;border-radius:10px;background:var(--warn-soft)}
 
 @media (min-width:720px){
   .app{max-width:720px;margin:0 auto;border-left:1px solid var(--border);border-right:1px solid var(--border)}

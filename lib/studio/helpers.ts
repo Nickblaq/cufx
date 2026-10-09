@@ -1,4 +1,18 @@
-import type { CatalogOperation, Condition, FormValues } from "./types";
+import type {
+  CatalogOperation,
+  Condition,
+  DynamicSource,
+  FormValues,
+  MediaKind,
+  MediaProfile,
+  Option,
+  PipelineStep,
+} from "./types";
+import {
+  acceptsKind,
+  getOperation,
+  producedKind,
+} from "@/lib/catalog/operations";
 
 export function evalCondition(
   cond: Condition | undefined,
@@ -81,4 +95,83 @@ export function makeUid(): string {
     }
   }
   return `step_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/* --------------------------- media-profile helpers ------------------------ */
+
+/**
+ * Options for a `dynamic` param, derived from the resolved URL profile.
+ *
+ * The catalogue's own `options` are the offline fallback so the form still
+ * renders before (or without) a resolve; once a profile exists the options are
+ * the ones the link actually offers — which is what stops a user choosing a
+ * resolution or caption language that does not exist.
+ */
+export function dynamicOptions(
+  source: DynamicSource | undefined,
+  fallback: Option[],
+  profile: MediaProfile | null | undefined
+): Option[] {
+  if (!source || !profile) return fallback;
+  switch (source) {
+    case "heights":
+      return [
+        { value: "best", label: "Best available" },
+        ...profile.heights.map((h) => ({ value: String(h), label: `${h}p` })),
+      ];
+    case "audioFormats":
+      return profile.audioFormats.length
+        ? profile.audioFormats.map((f) => ({ value: f, label: f.toUpperCase() }))
+        : fallback;
+    case "subtitleLangs":
+      return profile.subtitleLangs.length
+        ? profile.subtitleLangs.map((t) => ({
+            value: t.code,
+            label: `${t.name}${t.auto ? " (auto)" : ""}`,
+          }))
+        : fallback;
+    default:
+      return fallback;
+  }
+}
+
+/**
+ * Walk the pipeline and work out what kind of media comes out the far end.
+ *
+ * This is what keeps the operation list honest for multi-step pipelines: after
+ * "convert audio", image and video filters stop being offered, and after
+ * "extract frame" only image operations are.
+ */
+export function pipelineOutputKind(
+  startKind: MediaKind | null,
+  pipeline: PipelineStep[]
+): MediaKind | null {
+  let kind = startKind;
+  for (const step of pipeline) {
+    const op = getOperation(step.opId);
+    if (!op || !kind) continue;
+    // A step that cannot consume the current kind is left out of the walk —
+    // the UI already filters those out.
+    if (!acceptsKind(op, kind)) continue;
+    kind = producedKind(op, kind);
+  }
+  return kind;
+}
+
+/* ------------------------------ display helpers --------------------------- */
+
+/** yt-dlp hands back upload dates as `YYYYMMDD`. */
+export function formatDate(raw?: string | null): string {
+  const m = (raw ?? "").match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (!m) return raw ?? "–";
+  return `${m[1]}-${m[2]}-${m[3]}`;
+}
+
+/** Compact count for view numbers: 1234 → "1.2K", 4200000 → "4.2M". */
+export function formatCount(value?: number | null): string {
+  if (!value || !Number.isFinite(value)) return "–";
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return String(value);
 }

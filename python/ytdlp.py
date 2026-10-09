@@ -7,9 +7,12 @@ Usage:
 
 resolve  — prints a single JSON blob (raw yt-dlp info dict, trimmed) to
            stdout. On failure prints {"error": "..."} and exits 1.
-download — runs the download in the foreground, writing progress to
-           <status_file> as JSON. Exits 0 regardless — the status file is
-           the source of truth (see the standing contract in lib/jobs.ts).
+download — runs the download in the foreground. Every state change is both
+           written to <status_file> and mirrored to stdout as one JSON line;
+           the Node runner reads those lines and keeps job state in SQLite
+           (see lib/catalog/jobs.ts), so the file is only a local convenience.
+           Exits 0 regardless — failure is reported in the JSON, not the exit
+           code (see lib/catalog/jobs.ts for how the runner consumes it).
 """
 import json
 import os
@@ -29,8 +32,12 @@ def write_status(status_file: str, data: dict):
     tmp = status_file + ".tmp"
     with open(tmp, "w") as f:
         json.dump(data, f)
-    # Atomic-ish replace so the Node side never reads a half-written file.
+    # Atomic-ish replace so any file reader never sees a half-written blob.
     os.replace(tmp, status_file)
+    # Mirror every state change to stdout as a single JSON line. The Node job
+    # runner reads these lines and writes progress into SQLite — the status
+    # file is now only a local convenience, never the source of truth.
+    print(json.dumps(data), flush=True)
 
 
 def _append_log(state: dict, line: str):

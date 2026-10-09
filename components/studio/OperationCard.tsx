@@ -1,18 +1,28 @@
 "use client";
 
-import type { Operation } from "@/lib/studio/types";
+import type { CatalogOperation } from "@/lib/studio/types";
 import { Icons } from "./Icons";
+
+export function OperationIcon({
+  icon,
+  size,
+}: {
+  icon: string;
+  size?: number;
+}) {
+  const Icon = Icons[icon as keyof typeof Icons] ?? Icons.File;
+  return <Icon size={size} />;
+}
 
 export function OperationCard({
   op,
   onOpen,
   disabled,
 }: {
-  op: Operation;
+  op: CatalogOperation;
   onOpen: () => void;
   disabled?: boolean;
 }) {
-  const Icon = op.icon;
   return (
     <button
       type="button"
@@ -21,7 +31,7 @@ export function OperationCard({
       disabled={disabled}
     >
       <span className="opIcon">
-        <Icon />
+        <OperationIcon icon={op.icon} />
       </span>
       <span className="opBody">
         <span className="opName">
@@ -30,7 +40,8 @@ export function OperationCard({
         </span>
         <span className="opDesc">{op.description}</span>
         <span className="opMeta">
-          tier {op.tier} · {op.category} · {op.accepts}
+          {op.engine} · {op.accepts.length ? op.accepts.join("/") : "url"} →{" "}
+          {op.produces}
         </span>
       </span>
       <Icons.Chevron />

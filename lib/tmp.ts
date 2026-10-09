@@ -1,25 +1,25 @@
 // lib/tmp.ts
 //
-// Where this app keeps temporary files, and how long they live.
+// Where cufx keeps its disposable working data.
 //
-// Everything cufx writes to disk is disposable: uploads, downloaded media and
-// anything a job derives from them are deleted once they have been idle for
-// MEDIA_TTL_MS (see lib/cleanup.ts). Because nothing here is durable there is
-// nothing to configure — no data directory, no mounted volume, and no
-// environment variable decides where any of it goes.
+// Everything here is one directory at the project root — `.cufx-data/` — so the
+// SQLite catalog, its blobs, and per-job scratch files are all in one
+// gitignored corner of the repo instead of an OS temp dir that differs between
+// dev and production. The catalog is the source of truth for media objects;
+// individual job folders are scratch space that is swept once it goes idle
+// (see lib/cleanup.ts).
 import "server-only";
-import os from "node:os";
 import path from "node:path";
 import { readdir, rm, stat } from "node:fs/promises";
 
-/** One root for every file cufx owns. */
-export const TEMP_ROOT = path.join(os.tmpdir(), "cufx");
+/** One root for every file cufx owns. Gitignored. */
+export const DATA_ROOT = path.join(process.cwd(), ".cufx-data");
 
 /** SQLite index + content-addressed blobs — the shared catalog. */
-export const CATALOG_DIR = path.join(TEMP_ROOT, "catalog");
+export const CATALOG_DIR = path.join(DATA_ROOT, "catalog");
 
-/** One directory per job, holding its status file and its files. */
-export const JOBS_DIR = path.join(TEMP_ROOT, "jobs");
+/** One scratch directory per job, holding its working files. */
+export const JOBS_DIR = path.join(DATA_ROOT, "jobs");
 
 /** Temporary media is deleted once it has been idle for this long. */
 export const MEDIA_TTL_MS = 15 * 60 * 1000;
@@ -29,8 +29,8 @@ export const MEDIA_TTL_MS = 15 * 60 * 1000;
  *
  * Age is measured from the newest write rather than from creation so that work
  * in progress protects itself: a job still downloading or encoding keeps
- * rewriting its status file and its output, so its directory stays young and is
- * never deleted out from under it.
+ * rewriting its output, so its directory stays young and is never deleted out
+ * from under it.
  */
 export async function newestMtimeMs(target: string): Promise<number> {
   const info = await stat(target).catch(() => null);

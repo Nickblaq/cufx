@@ -1,42 +1,29 @@
 "use client";
 
-import type { JobProgress, PipelineStep, SourceRef } from "@/lib/studio/types";
+import type { Job, StudioSource } from "@/lib/studio/types";
 import { Icons } from "../Icons";
 
 export function RunView({
   source,
-  pipeline,
   job,
   error,
 }: {
-  source: SourceRef;
-  pipeline: PipelineStep[];
-  job: JobProgress | null;
+  source: StudioSource;
+  job: Job | null;
   error: string | null;
 }) {
   const percent = job?.percent ?? 0;
-  const activeIndex =
-    job?.stepIndex ??
-    Math.min(
-      Math.floor((percent / 100) * Math.max(pipeline.length, 1)),
-      Math.max(pipeline.length - 1, 0)
-    );
+  const steps = job?.steps ?? [];
+  const activeIndex = steps.findIndex((s) => s.status === "running");
   const circumference = 2 * Math.PI * 52;
-  const displayName = source?.name ?? source?.title ?? "…";
+  const displayName = source.name ?? source.url ?? "…";
 
   return (
     <div className="pad">
       <section className="card runHeader">
         <div className="runRingWrap">
           <svg viewBox="0 0 120 120" className="runRing">
-            <circle
-              cx="60"
-              cy="60"
-              r="52"
-              fill="none"
-              stroke="var(--border)"
-              strokeWidth="6"
-            />
+            <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" strokeWidth="6" />
             <circle
               cx="60"
               cy="60"
@@ -58,7 +45,8 @@ export function RunView({
         <div className="runMeta">
           <span className="runSource">{displayName}</span>
           <span className="runStep">
-            {job?.step ?? `Step ${activeIndex + 1} of ${pipeline.length}`}
+            {steps[activeIndex >= 0 ? activeIndex : steps.length - 1]?.name ??
+              "Preparing pipeline…"}
           </span>
         </div>
       </section>
@@ -83,33 +71,38 @@ export function RunView({
       </section>
 
       <section className="stepList">
-        {pipeline.map((step, i) => (
-          <div
-            key={step.uid}
-            className={
-              "stepRow " +
-              (i < activeIndex
-                ? "stepDone"
-                : i === activeIndex
+        {steps.map((step) => {
+          const state =
+            step.status === "completed"
+              ? "stepDone"
+              : step.status === "running"
                 ? "stepActive"
-                : "")
-            }
-          >
-            <div className="stepDot">
-              {i < activeIndex ? (
-                <Icons.Check size={12} />
-              ) : i === activeIndex ? (
-                <Icons.Bolt size={12} />
-              ) : (
-                <span>{i + 1}</span>
+                : step.status === "failed"
+                  ? "stepActive"
+                  : "";
+          return (
+            <div key={step.id} className={"stepRow " + state}>
+              <div className="stepDot">
+                {step.status === "completed" ? (
+                  <Icons.Check size={12} />
+                ) : step.status === "running" ? (
+                  <Icons.Bolt size={12} />
+                ) : step.status === "failed" ? (
+                  <Icons.Warn size={12} />
+                ) : (
+                  <span>{step.seq + 1}</span>
+                )}
+              </div>
+              <span className="stepName">{step.name}</span>
+              {step.outputObjectId && (
+                <span className="stepPct">→ {step.outputObjectId.slice(0, 6)}</span>
+              )}
+              {step.status === "running" && (
+                <span className="stepPct">{Math.round(step.percent)}%</span>
               )}
             </div>
-            <span className="stepName">{step.op.name}</span>
-            {i === activeIndex && job?.status === "running" && (
-              <span className="stepPct">{Math.round(percent)}%</span>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </section>
     </div>
   );

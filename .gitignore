@@ -7,7 +7,14 @@ __pycache__/
 # Next.js build output
 .next/
 out/
+build/
+dist/
 tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# cufx working data — the SQLite catalog, its blobs, and per-job scratch dirs.
+# This is disposable server state, never source.
+.cufx-data/
 
 # Environment / secrets
 .env

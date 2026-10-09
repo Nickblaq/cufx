@@ -46,6 +46,61 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_edges_parent ON edges(parent_id);
   `,
+
+  // v2 — job state. This replaces the old per-job status.json files: the
+  // canonical record of what was asked for, how far it has got, and what it
+  // produced now lives in the same SQLite file as the catalog it writes to.
+  //
+  // A `job` is the user's request. A `run` is one attempt at executing it
+  // (retry-safe: a failed run is kept and a new one is appended rather than
+  // mutating history). A `step` is one operation within a run; its
+  // output_object_id is a catalog link, so the next step can consume the
+  // previous step's result without any re-upload.
+  `
+  CREATE TABLE jobs (
+    id                TEXT PRIMARY KEY,
+    source_object_id  TEXT,
+    source_url        TEXT,
+    status            TEXT NOT NULL,
+    error             TEXT,
+    log               TEXT NOT NULL DEFAULT '',
+    result_object_id  TEXT,
+    created_at        INTEGER NOT NULL,
+    updated_at        INTEGER NOT NULL
+  );
+  CREATE INDEX idx_jobs_created ON jobs(created_at DESC);
+
+  CREATE TABLE runs (
+    id                TEXT PRIMARY KEY,
+    job_id            TEXT NOT NULL,
+    attempt           INTEGER NOT NULL DEFAULT 1,
+    status            TEXT NOT NULL,
+    error             TEXT,
+    result_object_id  TEXT,
+    created_at        INTEGER NOT NULL,
+    updated_at        INTEGER NOT NULL
+  );
+  CREATE INDEX idx_runs_job ON runs(job_id, attempt DESC);
+
+  CREATE TABLE steps (
+    id                TEXT PRIMARY KEY,
+    job_id            TEXT NOT NULL,
+    run_id            TEXT NOT NULL,
+    seq               INTEGER NOT NULL,
+    op_id             TEXT NOT NULL,
+    params_json       TEXT NOT NULL DEFAULT '{}',
+    status            TEXT NOT NULL,
+    input_object_id   TEXT,
+    output_object_id  TEXT,
+    error             TEXT,
+    log               TEXT NOT NULL DEFAULT '',
+    percent           REAL NOT NULL DEFAULT 0,
+    created_at        INTEGER NOT NULL,
+    updated_at        INTEGER NOT NULL
+  );
+  CREATE INDEX idx_steps_job ON steps(job_id, seq);
+  CREATE INDEX idx_steps_run ON steps(run_id, seq);
+  `,
 ];
 
 export function getCatalogDb(): CatalogDb {

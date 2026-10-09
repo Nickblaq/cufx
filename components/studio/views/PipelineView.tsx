@@ -1,45 +1,56 @@
 "use client";
 
-import type { PipelineStep, SourceRef } from "@/lib/studio/types";
+import type { PipelineStep, StudioSource } from "@/lib/studio/types";
+import { getOperation } from "@/lib/catalog/operations";
 import { Icons } from "../Icons";
+import { OperationIcon } from "../OperationCard";
 import { Stat } from "../Stat";
+import { formatBytes } from "@/lib/studio/helpers";
 
 export function PipelineView({
   source,
-  sourceKind,
-  sourceSizeBytes,
   pipeline,
   onAdd,
   onRemove,
   onMove,
   onRun,
+  onEdit,
   running,
   error,
-  onEdit,
+  undo,
+  redo,
+  canUndo,
+  canRedo,
+  onClear,
 }: {
-  source: SourceRef;
-  sourceKind?: string;
-  sourceSizeBytes?: number;
+  source: StudioSource;
   pipeline: PipelineStep[];
   onAdd: () => void;
   onRemove: (uid: string) => void;
   onMove: (i: number, d: -1 | 1) => void;
   onRun: () => void;
+  onEdit: (step: PipelineStep) => void;
   running: boolean;
   error: string | null;
-  onEdit: (step: PipelineStep) => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  onClear: () => void;
 }) {
-  const displayName = source?.name ?? source?.title ?? null;
+  const sourceLabel = source.name ?? source.url ?? null;
 
   return (
     <div className="pad">
       <section className="flowWrap">
         <div className="flowNode">
           <div className="flowNodeIcon">
-            {sourceKind === "audio" ? (
+            {source.kind === "audio" ? (
               <Icons.Music />
-            ) : sourceKind === "image" ? (
+            ) : source.kind === "image" ? (
               <Icons.Image />
+            ) : source.url && !source.objectId ? (
+              <Icons.Globe />
             ) : (
               <Icons.File />
             )}
@@ -47,7 +58,7 @@ export function PipelineView({
           <div className="flowNodeBody">
             <span className="flowNodeLabel">Source</span>
             <span className="flowNodeValue">
-              {displayName ?? "No source loaded"}
+              {sourceLabel ?? "No source loaded"}
             </span>
           </div>
         </div>
@@ -61,7 +72,7 @@ export function PipelineView({
         )}
 
         {pipeline.map((step, i) => {
-          const Icon = step.op.icon;
+          const op = getOperation(step.opId);
           return (
             <div key={step.uid} className="flowRow">
               <div className="flowLine" />
@@ -85,7 +96,7 @@ export function PipelineView({
                   </button>
                 </div>
                 <div className="flowNodeIcon flowNodeIconOp">
-                  <Icon size={18} />
+                  <OperationIcon icon={op?.icon ?? "File"} size={18} />
                 </div>
                 <button
                   type="button"
@@ -93,7 +104,9 @@ export function PipelineView({
                   onClick={() => onEdit(step)}
                 >
                   <span className="flowNodeLabel">Step {i + 1}</span>
-                  <span className="flowNodeValue">{step.op.name}</span>
+                  <span className="flowNodeValue">
+                    {op?.name ?? step.opId}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -119,12 +132,36 @@ export function PipelineView({
       {pipeline.length > 0 && (
         <section className="card statsCard">
           <Stat label="Steps" value={String(pipeline.length)} />
-          <Stat label="Source" value={sourceKind ?? "–"} />
+          <Stat label="Source" value={source.kind ?? "url"} />
           <Stat
             label="Input"
-            value={sourceSizeBytes !== undefined ? formatBytes(sourceSizeBytes) : "–"}
+            value={source.sizeBytes != null ? formatBytes(source.sizeBytes) : "–"}
           />
         </section>
+      )}
+
+      {pipeline.length > 0 && (
+        <div className="historyRow">
+          <button
+            type="button"
+            className="miniBtn"
+            onClick={undo}
+            disabled={!canUndo}
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            className="miniBtn"
+            onClick={redo}
+            disabled={!canRedo}
+          >
+            Redo
+          </button>
+          <button type="button" className="miniBtn miniBtnDanger" onClick={onClear}>
+            Clear
+          </button>
+        </div>
       )}
 
       {error && (
@@ -137,21 +174,10 @@ export function PipelineView({
         type="button"
         className="primaryBtn"
         onClick={onRun}
-        disabled={!source || pipeline.length === 0 || running}
+        disabled={pipeline.length === 0 || running}
       >
         {running ? "Starting…" : "Start"}
       </button>
     </div>
   );
-}
-
-function formatBytes(bytes: number): string {
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let n = bytes;
-  let i = 0;
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024;
-    i++;
-  }
-  return `${n.toFixed(1)} ${units[i]}`;
 }

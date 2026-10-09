@@ -1,73 +1,75 @@
+// lib/studio/types.ts
+//
+// Client-facing view of the shared catalog. Operations and params come straight
+// from the catalog, so the UI and the server runner can never drift apart.
+
+import type {
+  CatalogOperation,
+  Condition,
+  FormValues,
+  Option,
+  Param,
+  ParamType,
+} from "@/lib/catalog/operations";
+import type { MediaKind, MediaObject } from "@/lib/catalog/types";
+
+export type {
+  CatalogOperation,
+  Condition,
+  FormValues,
+  Option,
+  Param,
+  ParamType,
+  MediaKind,
+  MediaObject,
+};
+
 export type IconProps = { size?: number };
 
-export type ParamType =
-  | "string"
-  | "number"
-  | "integer"
-  | "boolean"
-  | "enum"
-  | "multiselect"
-  | "textarea";
+export type View = "source" | "catalog" | "pipeline" | "run" | "result";
 
-export type Option = { value: string; label: string };
+export type PipelineStep = { uid: string; opId: string; values: FormValues };
 
-export type Condition = {
-  param: string;
-  operator: "eq" | "neq" | "truthy" | "falsy";
-  value?: unknown;
+/** Where the pipeline currently starts. */
+export type StudioSource = {
+  objectId: string | null;
+  url: string | null;
+  name: string | null;
+  kind: MediaKind | null;
+  sizeBytes: number | null;
 };
 
-export type MediaKind = "audio" | "video" | "both";
-
-export type Param = {
-  key: string;
-  type: ParamType;
-  label: string;
-  group?: string;
-  default?: unknown;
-  options?: Option[];
-  placeholder?: string;
-  helpText?: string;
-  advanced?: boolean;
-  showIf?: Condition;
-  min?: number;
-  max?: number;
-  step?: number;
-  unit?: string;
-};
-
-export type Operation = {
-  id: string;
-  name: string;
-  description: string;
-  tier: number;
-  category: string;
-  accepts: MediaKind;
-  icon: React.ComponentType<IconProps>;
-  chainSteps?: string[];
-  favorite?: boolean;
-  params: Param[];
-};
-
-export type FormValues = Record<string, unknown>;
-export type OperationPayload = { id: string; params: FormValues };
-
+export type StepStatus = "queued" | "running" | "completed" | "failed" | "skipped";
 export type JobStatus = "queued" | "running" | "completed" | "failed";
 
-export type JobProgress = {
-  jobId: string;
-  status: JobStatus;
+export type JobStep = {
+  id: string;
+  seq: number;
+  opId: string;
+  name: string;
+  engine: string;
+  status: StepStatus;
   percent: number;
-  step?: string;
-  stepIndex?: number;
-  totalSteps?: number;
-  log?: string;
-  error?: string;
-  outputs?: { name: string; url: string; sizeBytes?: number }[];
+  inputObjectId: string | null;
+  outputObjectId: string | null;
+  error: string | null;
+  log: string;
 };
 
-export type View = "home" | "catalog" | "pipeline" | "run" | "result";
-export type PipelineStep = { uid: string; op: Operation; values: FormValues };
+export type Job = {
+  id: string;
+  status: JobStatus;
+  sourceObjectId: string | null;
+  sourceUrl: string | null;
+  error: string | null;
+  log: string;
+  resultObjectId: string | null;
+  percent: number;
+  steps: JobStep[];
+  outputs: MediaObject[];
+  createdAt: number;
+  updatedAt: number;
+};
 
-/** Minimal source shape both MediaInfo and Asset satisfy. */
+/** Minimal source shape the run/result views display. */
 export type SourceRef = { name?: string; title?: string } | null;

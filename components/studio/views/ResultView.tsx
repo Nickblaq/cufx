@@ -1,64 +1,52 @@
 "use client";
 
 import { useState } from "react";
-import type { JobProgress, SourceRef } from "@/lib/studio/types";
+import type { Job, MediaObject } from "@/lib/studio/types";
+import { formatBytes } from "@/lib/studio/helpers";
 import { Icons } from "../Icons";
 
 export function ResultView({
-  source,
   job,
   downloadUrl,
   titleComplete,
   titleFailed,
   onAgain,
   onHome,
+  onChain,
+  onRetry,
 }: {
-  source: SourceRef;
-  job: JobProgress | null;
-  downloadUrl: (jobId: string) => string;
+  job: Job | null;
+  downloadUrl: (id: string) => string;
   titleComplete: string;
   titleFailed: string;
   onAgain: () => void;
   onHome: () => void;
+  onChain: (objectId: string) => void;
+  onRetry: () => void;
 }) {
   const ok = job?.status === "completed";
   const outputs = job?.outputs ?? [];
-  const primary = outputs[0];
-  const [saving, setSaving] = useState(false);
+  const primary =
+    outputs.find((o) => o.id === job?.resultObjectId) ?? outputs[0] ?? null;
+  const [savingId, setSavingId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const displayName = source?.name ?? source?.title ?? "";
 
-  async function downloadAndSave() {
-    if (!job?.jobId || saving) return;
-    setSaving(true);
+  function save(object: MediaObject) {
+    setSavingId(object.id);
     setSaveError(null);
     try {
-      const res = await fetch(downloadUrl(job.jobId));
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `Download failed (${res.status})`);
-      }
-      const blob = await res.blob();
-
-      const cd = res.headers.get("Content-Disposition") || "";
-      const utf8 = cd.match(/filename\*=UTF-8''([^;]+)/i);
-      const ascii = cd.match(/filename="([^"]+)"/i);
-      const name = utf8
-        ? decodeURIComponent(utf8[1])
-        : ascii?.[1] ?? primary?.name ?? "download";
-
-      const href = URL.createObjectURL(blob);
+      // "Save to device" is an export straight from the catalog: the anchor
+      // points at the object id, so the server streams the exact bytes.
       const a = document.createElement("a");
-      a.href = href;
-      a.download = name;
+      a.href = downloadUrl(object.id);
+      a.download = object.name;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(href);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Download failed");
     } finally {
-      setSaving(false);
+      setSavingId(null);
     }
   }
 
@@ -69,7 +57,7 @@ export function ResultView({
           {ok ? <Icons.Check size={28} /> : <Icons.Warn size={28} />}
         </div>
         <h2 className="resultTitle">{ok ? titleComplete : titleFailed}</h2>
-        <p className="resultSub">{job?.error || displayName}</p>
+        <p className="resultSub">{job?.error || "Job finished"}</p>
       </section>
 
       {primary && (
@@ -79,7 +67,10 @@ export function ResultView({
           </div>
           <div className="videoMeta">
             <span className="videoName">{primary.name}</span>
-            <span className="videoInfo">{formatBytes(primary.sizeBytes)}</span>
+            <span className="videoInfo">
+              {formatBytes(primary.sizeBytes)} · {primary.kind} ·{" "}
+              {primary.id.slice(0, 8)}
+            </span>
           </div>
         </section>
       )}
@@ -90,38 +81,47 @@ export function ResultView({
         </div>
       )}
 
-      {ok && (
+      {ok && primary && (
         <button
           type="button"
           className="primaryBtn"
-          onClick={downloadAndSave}
-          disabled={saving}
+          onClick={() => save(primary)}
+          disabled={savingId === primary.id}
         >
-          <Icons.Download size={18} />
-          {saving ? "Preparing…" : "Save to device"}
+          <Icons.Download size={18} /> Save to device
         </button>
       )}
 
-      {outputs.length > 1 && (
+      {ok && primary && (
+        <button
+          type="button"
+          className="ghostBtnWide"
+          onClick={() => onChain(primary.id)}
+        >
+          <Icons.Flow /> Chain from this result
+        </button>
+      )}
+
+      {!ok && (
+        <button type="button" className="ghostBtnWide" onClick={onRetry}>
+          Retry job
+        </button>
+      )}
+
+      {outputs.length > 0 && (
         <section>
           <div className="rowHead">
-            <h3 className="sectionTitle">All outputs</h3>
-            <span className="rowAction">{outputs.length} files</span>
+            <h3 className="sectionTitle">Catalog outputs</h3>
+            <span className="rowAction">{outputs.length} objects</span>
           </div>
           <ul className="outputList">
             {outputs.map((o) => (
-              <li key={o.name}>
+              <li key={o.id}>
                 <button
                   type="button"
                   className="outputRow"
-                  onClick={downloadAndSave}
-                  style={{
-                    width: "100%",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    font: "inherit",
-                    color: "inherit",
-                  }}
+                  onClick={() => save(o)}
+                  style={{ width: "100%", cursor: "pointer" }}
                 >
                   <Icons.Download size={16} />
                   <span className="outputName">{o.name}</span>
@@ -143,16 +143,4 @@ export function ResultView({
       </div>
     </div>
   );
-}
-
-function formatBytes(bytes?: number): string {
-  if (bytes === undefined || bytes === null || Number.isNaN(bytes)) return "–";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let n = bytes;
-  let i = 0;
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024;
-    i++;
-  }
-  return `${n.toFixed(1)} ${units[i]}`;
 }

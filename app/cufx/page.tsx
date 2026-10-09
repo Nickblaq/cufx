@@ -19,6 +19,7 @@ import {
   TIER_FILTERS,
   TIER_RANGES,
   acceptsKind,
+  getOperation,
   groupByTier,
   type CatalogOperation,
   type TierFilter,
@@ -45,9 +46,11 @@ import { CatalogView } from "@/components/studio/views/CatalogView";
 import { PipelineView } from "@/components/studio/views/PipelineView";
 import { RunView } from "@/components/studio/views/RunView";
 import { ResultView } from "@/components/studio/views/ResultView";
+import { AssetsView } from "@/components/studio/views/AssetsView";
 
 const HEADER_TITLES: Record<View, string> = {
   source: "New Pipeline",
+  assets: "Server Assets",
   catalog: "Operations",
   pipeline: "Pipeline",
   run: "Working",
@@ -93,6 +96,13 @@ export default function CufxPage() {
   const [recent, setRecent] = useState<MediaObject[]>([]);
   const [recentError, setRecentError] = useState<string | null>(null);
 
+  const [assets, setAssets] = useState<MediaObject[]>([]);
+  const [assetsLoading, setAssetsLoading] = useState(false);
+  const [assetsError, setAssetsError] = useState<string | null>(null);
+  const [assetQuery, setAssetQuery] = useState("");
+  const [assetKind, setAssetKind] = useState<MediaKind | "all">("all");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   /* ------------------------------ catalog browser ------------------------ */
 
   const refreshRecent = useCallback(async () => {
@@ -107,6 +117,65 @@ export default function CufxPage() {
   useEffect(() => {
     void refreshRecent();
   }, [refreshRecent]);
+
+  /* ------------------------------ server assets -------------------------- */
+
+  const loadAssets = useCallback(async () => {
+    setAssetsLoading(true);
+    try {
+      setAssets(
+        await studioApi.listObjects({
+          limit: 200,
+          kind: assetKind === "all" ? undefined : assetKind,
+          search: assetQuery.trim() || undefined,
+        })
+      );
+      setAssetsError(null);
+    } catch (err) {
+      setAssetsError(err instanceof Error ? err.message : "Failed to load assets");
+    } finally {
+      setAssetsLoading(false);
+    }
+  }, [assetKind, assetQuery]);
+
+  useEffect(() => {
+    if (view !== "assets") return;
+    const timer = setTimeout(() => void loadAssets(), 200);
+    return () => clearTimeout(timer);
+  }, [view, loadAssets]);
+
+  const saveObject = useCallback((object: MediaObject) => {
+    const a = document.createElement("a");
+    a.href = studioApi.downloadUrl(object.id);
+    a.download = object.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }, []);
+
+  const deleteAsset = useCallback(
+    async (object: MediaObject) => {
+      if (typeof window !== "undefined" && !window.confirm(`Delete "${object.name}" from the server?`)) {
+        return;
+      }
+      setDeletingId(object.id);
+      try {
+        await studioApi.deleteObject(object.id);
+        setAssets((prev) => prev.filter((o) => o.id !== object.id));
+        setRecent((prev) => prev.filter((o) => o.id !== object.id));
+        if (source.objectId === object.id) {
+          setSource({ objectId: null, name: null, kind: null, sizeBytes: null, url: null });
+          clearPipeline();
+        }
+        setAssetsError(null);
+      } catch (err) {
+        setAssetsError(err instanceof Error ? err.message : "Delete failed");
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [source.objectId, setSource, clearPipeline]
+  );
 
   /* --------------------------------- polling ----------------------------- */
 
@@ -217,6 +286,21 @@ export default function CufxPage() {
   const sourceKind: MediaKind | null = source.kind;
   const hasUrl = Boolean(source.url);
 
+  // A URL pipeline only knows what kind of media it will get once it contains a
+  // download step. Until then only downloads can run; as soon as one exists its
+  // `produces` kind unlocks the ffmpeg operations that consume it — this is
+  // what makes `URL → download → trim → crop` chainable in one pipeline.
+  const downloadKind = useMemo<MediaKind | null>(() => {
+    if (!hasUrl) return null;
+    for (let i = pipeline.length - 1; i >= 0; i--) {
+      const op = getOperation(pipeline[i].opId);
+      if (op?.engine === "ytdlp") return op.produces;
+    }
+    return null;
+  }, [hasUrl, pipeline]);
+
+  const effectiveKind: MediaKind | null = sourceKind ?? downloadKind;
+
   const visibleOps = useMemo(() => {
     const [lo, hi] = TIER_RANGES[tierFilter];
     const q = search.trim().toLowerCase();
@@ -226,14 +310,14 @@ export default function CufxPage() {
       if (op.engine === "ytdlp") {
         if (!hasUrl) return false;
       } else {
-        if (!source.objectId || !sourceKind) return false;
-        if (!acceptsKind(op, sourceKind)) return false;
+        if (!effectiveKind) return false;
+        if (!acceptsKind(op, effectiveKind)) return false;
       }
 
       if (!q) return true;
       return (op.name + op.description + op.category).toLowerCase().includes(q);
     });
-  }, [tierFilter, search, hasUrl, source.objectId, sourceKind]);
+  }, [tierFilter, search, hasUrl, effectiveKind]);
 
   const grouped = useMemo(() => groupByTier(visibleOps), [visibleOps]);
 
@@ -242,9 +326,9 @@ export default function CufxPage() {
       OPERATIONS.filter((op) => {
         if (!op.favorite) return false;
         if (op.engine === "ytdlp") return hasUrl;
-        return Boolean(source.objectId && sourceKind && acceptsKind(op, sourceKind));
+        return Boolean(effectiveKind && acceptsKind(op, effectiveKind));
       }),
-    [hasUrl, source.objectId, sourceKind]
+    [hasUrl, effectiveKind]
   );
 
   function openConfigure(op: CatalogOperation, step?: PipelineStep) {
@@ -313,8 +397,10 @@ export default function CufxPage() {
   const headerSub =
     view === "source"
       ? sourceLabel
-      : view === "catalog"
-        ? `${pipeline.length} in pipeline`
+      : view === "assets"
+        ? `${assets.length} on server`
+        : view === "catalog"
+          ? `${pipeline.length} in pipeline`
         : view === "pipeline"
           ? pipeline.length
             ? `${pipeline.length} steps`
@@ -484,6 +570,23 @@ export default function CufxPage() {
           </div>
         )}
 
+        {view === "assets" && (
+          <AssetsView
+            objects={assets}
+            loading={assetsLoading}
+            error={assetsError}
+            query={assetQuery}
+            setQuery={setAssetQuery}
+            kind={assetKind}
+            setKind={setAssetKind}
+            onUse={pickObject}
+            onDownload={saveObject}
+            onDelete={deleteAsset}
+            onRefresh={() => void loadAssets()}
+            deletingId={deletingId}
+          />
+        )}
+
         {view === "catalog" && (
           <>
             {(!source.objectId && !source.url) && (
@@ -584,6 +687,12 @@ export default function CufxPage() {
           label="Ops"
           icon={<Icons.Grid />}
           onClick={() => setView("catalog")}
+        />
+        <NavButton
+          active={view === "assets"}
+          label="Assets"
+          icon={<Icons.Archive />}
+          onClick={() => setView("assets")}
         />
         <NavButton
           active={view === "pipeline" || view === "run" || view === "result"}

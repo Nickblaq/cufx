@@ -17,6 +17,7 @@ import { getCatalogDb } from "./db";
 import { JOBS_DIR } from "@/lib/tmp";
 import { getOperation, type FormValues } from "./operations";
 import { buildObjectStep, buildYtdlpOptions } from "./engines";
+import { extFromName, mimeForExt } from "./blobs";
 import {
   getStoredObject,
   ingestFile,
@@ -469,6 +470,10 @@ async function registerDownloadOutputs(
       const object = await ingestFile({
         path: full,
         name,
+        // yt-dlp hands us a bare file, so give the record its real MIME type
+        // up front — otherwise a downloaded video is only known by extension
+        // and gets served back as a generic binary.
+        mime: mimeForExt(extFromName(name)),
         origin: "download",
         url,
         provider,

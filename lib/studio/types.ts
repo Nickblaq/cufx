@@ -26,7 +26,13 @@ export type {
 
 export type IconProps = { size?: number };
 
-export type View = "source" | "catalog" | "pipeline" | "run" | "result";
+export type View =
+  | "source"
+  | "assets"
+  | "catalog"
+  | "pipeline"
+  | "run"
+  | "result";
 
 export type PipelineStep = { uid: string; opId: string; values: FormValues };
 

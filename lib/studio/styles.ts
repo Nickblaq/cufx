@@ -52,6 +52,13 @@ export const STUDIO_STYLES = `
 .assetName{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .assetInfo{font-size:11.5px;color:var(--ink-soft);font-family:var(--font-mono)}
 .assetActions{display:flex;gap:6px}
+.assetRow{cursor:default;padding:10px 12px}
+.assetMetaBtn{background:transparent;border:none;padding:0;cursor:pointer;text-align:left;font-family:inherit;color:inherit}
+.assetMetaBtn:hover .assetName{color:var(--accent)}
+.iconAction{width:34px;height:34px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--ink-soft);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;padding:0}
+.iconAction:hover:not(:disabled){background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.iconAction:disabled{opacity:.4;cursor:default}
+.iconActionDanger:hover:not(:disabled){background:var(--danger-soft);border-color:var(--danger);color:var(--danger)}
 
 .mediaCard{display:flex;flex-direction:column;gap:12px;padding:12px}
 .mediaThumb{position:relative;height:150px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#1e293b,#334155);display:flex;align-items:center;justify-content:center;color:#fff}

@@ -93,7 +93,13 @@ export const studioApi = {
   },
 
   async deleteObject(id: string): Promise<void> {
-    await fetch(`/api/catalog/${encodeURIComponent(id)}`, { method: "DELETE" });
+    const res = await fetch(`/api/catalog/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      throw new Error(data?.error || "Delete failed");
+    }
   },
 
   /** Save-to-device / chaining target: stream an object out of the catalog. */

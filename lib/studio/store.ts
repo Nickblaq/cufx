@@ -13,7 +13,13 @@
 import { create } from "zustand";
 import { temporal } from "zundo";
 import { useStore } from "zustand";
-import type { FormValues, PipelineStep, StudioSource, View } from "./types";
+import type {
+  FormValues,
+  MediaProfile,
+  PipelineStep,
+  StudioSource,
+  View,
+} from "./types";
 import { makeUid } from "./helpers";
 
 export type StudioState = {
@@ -21,10 +27,17 @@ export type StudioState = {
   pipeline: PipelineStep[];
   view: View;
   jobId: string | null;
+  /**
+   * What a URL source actually contains, resolved before any download. Null for
+   * file sources. This is what makes the operation forms honest — the download
+   * params read real resolutions and caption languages out of it.
+   */
+  profile: MediaProfile | null;
 
   setView: (view: View) => void;
   setJobId: (jobId: string | null) => void;
   setSource: (source: Partial<StudioSource>) => void;
+  setProfile: (profile: MediaProfile | null) => void;
   clearSource: () => void;
 
   addStep: (opId: string, values: FormValues) => void;
@@ -50,12 +63,20 @@ export const useStudioStore = create<StudioState>()(
       pipeline: [],
       view: "source",
       jobId: null,
+      profile: null,
 
       setView: (view) => set({ view }),
       setJobId: (jobId) => set({ jobId }),
       setSource: (source) => set((s) => ({ source: { ...s.source, ...source } })),
+      setProfile: (profile) => set({ profile }),
       clearSource: () =>
-        set({ source: EMPTY_SOURCE, pipeline: [], jobId: null, view: "source" }),
+        set({
+          source: EMPTY_SOURCE,
+          pipeline: [],
+          jobId: null,
+          view: "source",
+          profile: null,
+        }),
 
       addStep: (opId, values) =>
         set((s) => ({
@@ -84,7 +105,13 @@ export const useStudioStore = create<StudioState>()(
       clearPipeline: () => set({ pipeline: [] }),
 
       reset: () =>
-        set({ source: EMPTY_SOURCE, pipeline: [], view: "source", jobId: null }),
+        set({
+          source: EMPTY_SOURCE,
+          pipeline: [],
+          view: "source",
+          jobId: null,
+          profile: null,
+        }),
     }),
     {
       // Only pipeline edits are undoable; navigation and job ids are not part

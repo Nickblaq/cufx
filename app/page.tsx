@@ -92,7 +92,8 @@ export default function Home() {
           display: flex;
           flex-direction: column;
           gap: 30px;
-          padding-bottom: 20px;
+          min-height: 100vh;
+          padding: 0 20px;
         }
 
         .hero {

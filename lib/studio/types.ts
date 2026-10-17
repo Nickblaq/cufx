@@ -11,22 +11,39 @@ import type {
   Param,
   ParamType,
 } from "@/lib/catalog/operations";
-import type { MediaKind, MediaObject } from "@/lib/catalog/types";
+import type { DynamicSource } from "@/lib/catalog/operations";
+import type {
+  MediaFormat,
+  MediaKind,
+  MediaObject,
+  MediaProfile,
+  SubtitleTrack,
+} from "@/lib/catalog/types";
 
 export type {
   CatalogOperation,
   Condition,
+  DynamicSource,
   FormValues,
   Option,
   Param,
   ParamType,
+  MediaFormat,
   MediaKind,
   MediaObject,
+  MediaProfile,
+  SubtitleTrack,
 };
 
 export type IconProps = { size?: number };
 
-export type View = "source" | "catalog" | "pipeline" | "run" | "result";
+export type View =
+  | "source"
+  | "assets"
+  | "catalog"
+  | "pipeline"
+  | "run"
+  | "result";
 
 export type PipelineStep = { uid: string; opId: string; values: FormValues };
 

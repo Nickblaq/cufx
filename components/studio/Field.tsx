@@ -1,17 +1,57 @@
 "use client";
 
-import type { Param } from "@/lib/studio/types";
+import type { Option, Param } from "@/lib/studio/types";
 
 export function Field({
   param,
   value,
   onChange,
+  objectOptions,
 }: {
   param: Param;
   value: unknown;
   onChange: (v: unknown) => void;
+  /** Catalog objects available for an `object` param, pre-filtered by kind. */
+  objectOptions?: Option[];
 }) {
   switch (param.type) {
+    case "object": {
+      const options = objectOptions ?? [];
+      const selected = (value as string) ?? "";
+      if (options.length === 0) {
+        return (
+          <div className="field">
+            <span className="fieldHead">
+              <span className="fieldLabel">{param.label}</span>
+            </span>
+            <p className="objectEmpty">
+              No other media in the catalog to combine with this yet. Run a
+              download or upload first, then come back.
+            </p>
+          </div>
+        );
+      }
+      return (
+        <label className="field">
+          <span className="fieldHead">
+            <span className="fieldLabel">{param.label}</span>
+            {param.required && <span className="fieldValue">required</span>}
+          </span>
+          <select
+            value={selected}
+            onChange={(e) => onChange(e.target.value)}
+          >
+            <option value="">Choose…</option>
+            {options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {param.helpText && <p className="fieldHelp">{param.helpText}</p>}
+        </label>
+      );
+    }
     case "string":
       return (
         <label className="field">

@@ -14,6 +14,7 @@ export function ResultView({
   onHome,
   onChain,
   onRetry,
+  onInspect,
 }: {
   job: Job | null;
   downloadUrl: (id: string) => string;
@@ -23,6 +24,8 @@ export function ResultView({
   onHome: () => void;
   onChain: (objectId: string) => void;
   onRetry: () => void;
+  /** Preview an output instead of downloading it. */
+  onInspect?: (object: MediaObject) => void;
 }) {
   const ok = job?.status === "completed";
   const outputs = job?.outputs ?? [];
@@ -117,16 +120,30 @@ export function ResultView({
           <ul className="outputList">
             {outputs.map((o) => (
               <li key={o.id}>
-                <button
-                  type="button"
-                  className="outputRow"
-                  onClick={() => save(o)}
-                  style={{ width: "100%", cursor: "pointer" }}
-                >
-                  <Icons.Download size={16} />
-                  <span className="outputName">{o.name}</span>
+                <div className="outputRow">
+                  {onInspect ? (
+                    <button
+                      type="button"
+                      className="iconAction"
+                      onClick={() => onInspect(o)}
+                      aria-label="Preview output"
+                      title="Preview"
+                    >
+                      <Icons.Play size={14} />
+                    </button>
+                  ) : (
+                    <Icons.Download size={16} />
+                  )}
+                  <button
+                    type="button"
+                    className="outputNameBtn"
+                    onClick={() => save(o)}
+                    title="Save to device"
+                  >
+                    {o.name}
+                  </button>
                   <span className="outputSize">{formatBytes(o.sizeBytes)}</span>
-                </button>
+                </div>
               </li>
             ))}
           </ul>

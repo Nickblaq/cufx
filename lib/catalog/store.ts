@@ -341,9 +341,23 @@ export function setObjectDuration(id: string, seconds: number): void {
     .run(seconds, Date.now(), id);
 }
 
-export function deleteObject(id: string): boolean {
-  const res = getCatalogDb().prepare(`DELETE FROM objects WHERE id = ?`).run(id);
-  return res.changes > 0;
+/**
+ * Remove an object entirely: its row, every edge that referenced it, and the
+ * blob on disk. Leaving the blob behind would keep the file listed by nothing
+ * but still eating server space until the next orphan sweep.
+ */
+export async function deleteObject(id: string): Promise<boolean> {
+  const stored = getStoredObject(id);
+  if (!stored) return false;
+
+  const db = getCatalogDb();
+  db.transaction(() => {
+    db.prepare(`DELETE FROM edges WHERE child_id = ? OR parent_id = ?`).run(id, id);
+    db.prepare(`DELETE FROM objects WHERE id = ?`).run(id);
+  })();
+
+  await unlink(resolveBlob(stored.blobPath)).catch(() => {});
+  return true;
 }
 
 /* -------------------------------- expiry --------------------------------- */
